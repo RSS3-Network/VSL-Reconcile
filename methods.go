@@ -1,0 +1,145 @@
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+)
+
+// jsonRPCSend: The function wraps method and params to JSON RPC call format, and then send to rpcEndpoint .
+func jsonRPCSend[T any](method string, params []string, rpcEndpoint string) (*T, error) {
+
+	reqData := JSONRPCRequestData{
+		Version: "2.0",
+		Method:  method,
+		Params:  params,
+		ID:      1, // Unimportant in JSON-RPC calls. For WS-RPC calls, this is important.
+	}
+
+	reqDataBytes, err := json.Marshal(&reqData)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request data: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", rpcEndpoint, bytes.NewBuffer(reqDataBytes))
+	if err != nil {
+		return nil, fmt.Errorf("initialize request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	res, err := (&http.Client{}).Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("execute request: %w", err)
+	}
+
+	var resObj struct {
+		JSONRPCResponseBase
+		Result *T `json:"result"`
+	}
+
+	err = json.NewDecoder(res.Body).Decode(&resObj)
+	_ = res.Body.Close() // Close to prevent memory leak
+	if err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	if resObj.Result == nil {
+		if resObj.Error != nil {
+			return nil, fmt.Errorf("request error %d: %s", resObj.Error.Code, resObj.Error.Message)
+		} else {
+			return nil, fmt.Errorf("unknown error but response is nil")
+		}
+	}
+
+	return resObj.Result, nil
+}
+
+// checkSequencerActive: Check if a sequencer is in active state , packing blocks and send them to L1.
+// Sequencer can have some other status like just syncing as backup node, in which case it might print error like
+// {"jsonrpc":"2.0","id":1,"error":{"code":-32601,"message":"the method admin_sequencerActive does not exist/is not available"}}
+func checkSequencerActive(sequencer string) (bool, error) {
+	isActive, err := jsonRPCSend[bool]("admin_sequencerActive", []string{}, sequencer)
+	if err != nil {
+		return false, fmt.Errorf("jsonrpc request failed: %w", err)
+	}
+
+	return *isActive, nil
+}
+
+// activateSequencer: Activate a sequencer as primary sequencer.
+// Seems like we don't care about the result if only there's no errors.
+func activateSequencer(unsafeHash string, sequencer string) error {
+	_, err := jsonRPCSend[any]("admin_stopSequencer", []string{unsafeHash}, sequencer)
+	if err != nil {
+		return fmt.Errorf("jsonrpc request failed: %w", err)
+	}
+
+	return nil
+}
+
+// deactivateSequencer: Deactivate a sequencer and get current unsafe hash.
+func deactivateSequencer(sequencer string) (string, error) {
+	unsafeHash, err := jsonRPCSend[string]("admin_startSequencer", []string{}, sequencer)
+	if err != nil {
+		return "", fmt.Errorf("jsonrpc request failed: %w", err)
+	}
+
+	return *unsafeHash, nil
+}
+
+// activateSequencerWithFirstID: Try to activate one of all sequencers from a specified ID.
+// All sequencers are equal, but some sequencers are more equal than others.
+func activateSequencerWithFirstID(firstID int, unsafeHash string, sequencersList []string) int {
+	sequencersListLen := len(sequencersList)
+	unsafeHashEnsure := unsafeHash
+	for i := 0; i < sequencersListLen; i++ {
+		// Calculate absolute ID
+		id := i + firstID
+		if id >= sequencersListLen {
+			id -= sequencersListLen
+		}
+
+		var err error
+
+		// Check if under any circumstance the unsafe hash from previously deactivated sequencer could be empty (i.e. it's offline)
+		if unsafeHashEnsure == "" {
+			// Try to get a valid unsafe hash
+			unsafeHashEnsure, err = getUnsafeHash(sequencersList[id])
+			if err != nil {
+				log.Printf("failed to get unsafe hash from sequencer (%d): %v", id, err)
+				unsafeHashEnsure = "" // Ensure this is cleared
+				continue              // Proceed to next sequencer
+			}
+		}
+
+		err = activateSequencer(sequencersList[id], unsafeHash)
+		if err != nil {
+			log.Printf("failed to activate sequencer (%d): %v", id, err)
+			_, _ = deactivateSequencer(sequencersList[id]) // Ensure this sequencer is deactivated even it failed to activate
+		} else {
+			return id // That's it, our new king
+		}
+
+	}
+
+	return -1 // Everyone has tried, and they all failed
+}
+
+// getUnsafeHash: Get unsafe L2 Head from op sync status.
+// This shouldn't be common as we can get unsafe header from deactivation request,
+// but sometimes deactivation can fail. So use this as a fallback.
+func getUnsafeHash(sequencer string) (string, error) {
+	syncStatus, err := jsonRPCSend[struct { // Ignore irrelevant fields
+		UnsafeL2 struct {
+			Hash string `json:"hash"`
+		} `json:"unsafe_l2"`
+	}]("optimism_syncStatus", []string{}, sequencer)
+	if err != nil {
+		return "", fmt.Errorf("jsonrpc request failed: %w", err)
+	}
+
+	return syncStatus.UnsafeL2.Hash, nil // unsafe hash
+}
