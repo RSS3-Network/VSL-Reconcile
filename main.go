@@ -31,7 +31,7 @@ func activateSequencerWithFirstID(firstID int, unsafeHash string, sequencersList
 
 		var err error
 
-		// Check if under any circumstance the unsafe hash from previously deactivated sequencer could be empty (i.e. it's offline)
+		// Check if under any circumstance the unsafe hash from previously deactivated sequencer could be empty (e.g. it's offline)
 		if unsafeHashEnsure == "" {
 			// Try to get a valid unsafe hash
 			unsafeHashEnsure, _, err = getUnsafeL2Status(sequencersList[id])
