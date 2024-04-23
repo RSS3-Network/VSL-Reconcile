@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 )
 
@@ -90,56 +89,19 @@ func deactivateSequencer(sequencer string) (string, error) {
 	return *unsafeHash, nil
 }
 
-// activateSequencerWithFirstID: Try to activate one of all sequencers from a specified ID.
-// All sequencers are equal, but some sequencers are more equal than others.
-func activateSequencerWithFirstID(firstID int, unsafeHash string, sequencersList []string) int {
-	sequencersListLen := len(sequencersList)
-	unsafeHashEnsure := unsafeHash
-	for i := 0; i < sequencersListLen; i++ {
-		// Calculate absolute ID
-		id := i + firstID
-		if id >= sequencersListLen {
-			id -= sequencersListLen
-		}
-
-		var err error
-
-		// Check if under any circumstance the unsafe hash from previously deactivated sequencer could be empty (i.e. it's offline)
-		if unsafeHashEnsure == "" {
-			// Try to get a valid unsafe hash
-			unsafeHashEnsure, err = getUnsafeHash(sequencersList[id])
-			if err != nil {
-				log.Printf("failed to get unsafe hash from sequencer (%d): %v", id, err)
-				unsafeHashEnsure = "" // Ensure this is cleared
-				continue              // Proceed to next sequencer
-			}
-		}
-
-		err = activateSequencer(sequencersList[id], unsafeHash)
-		if err != nil {
-			log.Printf("failed to activate sequencer (%d): %v", id, err)
-			_, _ = deactivateSequencer(sequencersList[id]) // Ensure this sequencer is deactivated even it failed to activate
-		} else {
-			return id // That's it, our new king
-		}
-
-	}
-
-	return -1 // Everyone has tried, and they all failed
-}
-
-// getUnsafeHash: Get unsafe L2 Head from op sync status.
+// getUnsafeL2Status: Get unsafe L2 Head from op sync status.
 // This shouldn't be common as we can get unsafe header from deactivation request,
 // but sometimes deactivation can fail. So use this as a fallback.
-func getUnsafeHash(sequencer string) (string, error) {
+func getUnsafeL2Status(sequencer string) (string, int64, error) {
 	syncStatus, err := jsonRPCSend[struct { // Ignore irrelevant fields
 		UnsafeL2 struct {
-			Hash string `json:"hash"`
+			Hash   string `json:"hash"`
+			Number int64  `json:"number"`
 		} `json:"unsafe_l2"`
 	}]("optimism_syncStatus", []string{}, sequencer)
 	if err != nil {
-		return "", fmt.Errorf("jsonrpc request failed: %w", err)
+		return "", 0, fmt.Errorf("jsonrpc request failed: %w", err)
 	}
 
-	return syncStatus.UnsafeL2.Hash, nil // unsafe hash
+	return syncStatus.UnsafeL2.Hash, syncStatus.UnsafeL2.Number, nil // unsafe hash
 }

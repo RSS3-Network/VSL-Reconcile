@@ -17,6 +17,44 @@ import (
 	"time"
 )
 
+// activateSequencerWithFirstID: Try to activate one of all sequencers from a specified ID.
+// All sequencers are equal, but some sequencers are more equal than others.
+func activateSequencerWithFirstID(firstID int, unsafeHash string, sequencersList []string) int {
+	sequencersListLen := len(sequencersList)
+	unsafeHashEnsure := unsafeHash
+	for i := 0; i < sequencersListLen; i++ {
+		// Calculate absolute ID
+		id := i + firstID
+		if id >= sequencersListLen {
+			id -= sequencersListLen
+		}
+
+		var err error
+
+		// Check if under any circumstance the unsafe hash from previously deactivated sequencer could be empty (i.e. it's offline)
+		if unsafeHashEnsure == "" {
+			// Try to get a valid unsafe hash
+			unsafeHashEnsure, _, err = getUnsafeL2Status(sequencersList[id])
+			if err != nil {
+				log.Printf("failed to get unsafe hash from sequencer (%d): %v", id, err)
+				unsafeHashEnsure = "" // Ensure this is cleared
+				continue              // Proceed to next sequencer
+			}
+		}
+
+		err = activateSequencer(sequencersList[id], unsafeHash)
+		if err != nil {
+			log.Printf("failed to activate sequencer (%d): %v", id, err)
+			_, _ = deactivateSequencer(sequencersList[id]) // Ensure this sequencer is deactivated even it failed to activate
+		} else {
+			return id // That's it, our new king
+		}
+
+	}
+
+	return -1 // Everyone has tried, and they all failed
+}
+
 func main() {
 	// Read sequencers list from environment variable (comma-separated)
 	sequencersListStr := os.Getenv("SEQUENCERS_LIST")
@@ -30,12 +68,23 @@ func main() {
 	// Parse check interval
 	checkIntervalStr := os.Getenv("CHECK_INTERVAL")
 	if checkIntervalStr == "" {
-		checkIntervalStr = "1s" // Default set as 1 seconds
+		checkIntervalStr = "1s" // Default set as +1s
 	}
 
 	checkInterval, err := time.ParseDuration(checkIntervalStr)
 	if err != nil {
 		log.Fatalf("failed to parse check interval str (%s): %v", checkIntervalStr, err)
+	}
+
+	// Parse max block time (how long can we tolerate if the block number doesn't increase)
+	maxBlockTimeStr := os.Getenv("MAX_BLOCK_TIME")
+	if maxBlockTimeStr == "" {
+		maxBlockTimeStr = "30s" // Default set as 30s
+	}
+
+	maxBlockTime, err := time.ParseDuration(maxBlockTimeStr)
+	if err != nil {
+		log.Fatalf("failed to parse max block time str (%s): %v", maxBlockTimeStr, err)
 	}
 
 	// Determine which sequencer is primary
@@ -74,6 +123,10 @@ func main() {
 
 	// Start routine
 	t := time.NewTicker(checkInterval)
+
+	currentBlockTime := time.Now()
+	currentBlockHeight := int64(0)
+
 	for {
 		// Wait for ticker
 		<-t.C
@@ -85,8 +138,24 @@ func main() {
 		} else if !isActive {
 			log.Printf("primary sequencer is not active, switching...")
 		} else {
-			// It's fine
-			continue
+			// Let's check the block height
+			_, blockHeight, err := getUnsafeL2Status(sequencersList[primarySequencerID])
+			if err != nil {
+				log.Printf("failed to get unsafe L2 status from primary sequencer: %v", err)
+			}
+
+			if blockHeight > currentBlockHeight {
+				// Say hi to our new block
+				currentBlockTime = time.Now()
+				currentBlockHeight = blockHeight
+				continue
+			} else {
+				// equal or even less than, check max block delay
+				if time.Now().Sub(currentBlockTime) <= maxBlockTime {
+					// Within acceptable limit, proceed
+					continue
+				} // else we can't tolerate this, gear up and let's restart the sequencer!
+			}
 		}
 
 		// If current sequencer is working abnormally, promote next sequencer as primary
