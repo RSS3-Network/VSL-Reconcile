@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 )
 
 // jsonRPCSend: The function wraps method and params to JSON RPC call format, and then send to rpcEndpoint .
@@ -29,7 +30,9 @@ func jsonRPCSend[T any](method string, params []string, rpcEndpoint string) (*T,
 
 	req.Header.Set("Content-Type", "application/json")
 
-	res, err := (&http.Client{}).Do(req)
+	res, err := (&http.Client{
+		Timeout: 1 * time.Second,
+	}).Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("execute request: %w", err)
 	}
