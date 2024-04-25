@@ -1,5 +1,5 @@
 /*
- * Sequencers watchdog for Optimism nodes
+ * Sequencers watchdog for Optimism sequencers
  *
  * For detailed API specifications
  * please refer to https://docs.optimism.io/builders/node-operators/json-rpc#admin
@@ -32,14 +32,25 @@ func activateSequencerWithFirstID(firstID int, unsafeHash string, sequencersList
 		var err error
 
 		// Check if under any circumstance the unsafe hash from previously deactivated sequencer could be empty (e.g. it's offline)
+		// Try to get a valid unsafe hash
+		var (
+			isSequencerReady   bool
+			unsafeHashResponse string
+		)
+		unsafeHashResponse, _, isSequencerReady, err = getOPSyncStatus(sequencersList[id])
+		if err != nil {
+			log.Printf("failed to get unsafe hash from sequencer (%d): %v", id, err)
+			continue // Proceed to next sequencer
+		}
+		if !isSequencerReady || unsafeHashResponse == "" {
+			// This sequencer is not ready to be activated
+			log.Printf("sequencer (%d) is not ready to be activated: %v", id, err)
+			continue
+		}
+
+		// Update possible missing unsafe hash parameter
 		if unsafeHashEnsure == "" {
-			// Try to get a valid unsafe hash
-			unsafeHashEnsure, _, err = getUnsafeL2Status(sequencersList[id])
-			if err != nil {
-				log.Printf("failed to get unsafe hash from sequencer (%d): %v", id, err)
-				unsafeHashEnsure = "" // Ensure this is cleared
-				continue              // Proceed to next sequencer
-			}
+			unsafeHashEnsure = unsafeHashResponse
 		}
 
 		err = activateSequencer(sequencersList[id], unsafeHash)
@@ -150,7 +161,7 @@ func main() {
 		} else {
 			// Primary sequencer is active, let's check the block height
 			log.Printf("start check current block height")
-			_, blockHeight, err := getUnsafeL2Status(sequencersList[primarySequencerID])
+			_, blockHeight, _, err := getOPSyncStatus(sequencersList[primarySequencerID])
 			if err != nil {
 				log.Printf("failed to get unsafe L2 status from primary sequencer (#%d %s): %v", primarySequencerID, sequencersList[primarySequencerID], err)
 				// Then see this sequencer as working abnormally, proceed to restart it

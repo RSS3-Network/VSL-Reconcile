@@ -90,21 +90,30 @@ func deactivateSequencer(sequencer string) (string, error) {
 	return *unsafeHash, nil
 }
 
-// getUnsafeL2Status: Get unsafe L2 Head from op sync status.
+// getOPSyncStatus: Get unsafe L2 Head from op sync status.
 // This shouldn't be common as we can get unsafe header from deactivation request,
 // but sometimes deactivation can fail. So use this as a fallback.
-func getUnsafeL2Status(sequencer string) (string, int64, error) {
+func getOPSyncStatus(sequencer string) (string, int64, bool, error) {
 	syncStatus, err := jsonRPCCall[struct { // Ignore irrelevant fields
+		HeadL1 struct {
+			Hash       string    `json:"hash"`
+			Number     int       `json:"number"`
+			ParentHash string    `json:"parentHash"`
+			Timestamp  time.Time `json:"timestamp"` // Used for check if sequencer is ready ( 12s * 3 )
+		} `json:"head_l1"`
 		UnsafeL2 struct {
-			Hash   string `json:"hash"`
-			Number int64  `json:"number"`
+			Hash      string    `json:"hash"`
+			Number    int64     `json:"number"`
+			Timestamp time.Time `json:"timestamp"`
 		} `json:"unsafe_l2"`
 	}]("optimism_syncStatus", []string{}, sequencer)
 	if err != nil {
-		return "", 0, fmt.Errorf("jsonrpc request failed: %w", err)
+		return "", 0, false, fmt.Errorf("jsonrpc request failed: %w", err)
 	} else if syncStatus == nil {
-		return "", 0, fmt.Errorf("unknown response nil")
+		return "", 0, false, fmt.Errorf("unknown response nil")
 	}
 
-	return syncStatus.UnsafeL2.Hash, syncStatus.UnsafeL2.Number, nil // unsafe hash
+	return syncStatus.UnsafeL2.Hash, syncStatus.UnsafeL2.Number, // unsafe hash
+		time.Now().Sub(syncStatus.HeadL1.Timestamp) < MaxMainnetBlockTimestampLateTolerance, // is sequencer sync with mainnet (max tolerance 3 blocks behind) and ready to be activated
+		nil
 }
