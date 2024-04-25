@@ -156,6 +156,7 @@ func main() {
 				// Then see this sequencer as working abnormally, proceed to restart it
 			} else {
 				// Regard this request as successful and blockHeight is real
+				log.Printf("block height get, start compare")
 				if blockHeight > currentBlockHeight {
 					// Say hi to our new block
 					log.Printf("new block height found, reset tolerate timer")
