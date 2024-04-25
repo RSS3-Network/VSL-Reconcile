@@ -48,12 +48,8 @@ func jsonRPCSend[T any](method string, params []string, rpcEndpoint string) (*T,
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 
-	if resObj.Result == nil {
-		if resObj.Error != nil {
-			return nil, fmt.Errorf("request error %d: %s", resObj.Error.Code, resObj.Error.Message)
-		} else {
-			return nil, fmt.Errorf("unknown error but response is nil")
-		}
+	if resObj.Error != nil {
+		return nil, fmt.Errorf("request error %d: %s", resObj.Error.Code, resObj.Error.Message)
 	}
 
 	return resObj.Result, nil
@@ -66,6 +62,8 @@ func checkSequencerActive(sequencer string) (bool, error) {
 	isActive, err := jsonRPCSend[bool]("admin_sequencerActive", []string{}, sequencer)
 	if err != nil {
 		return false, fmt.Errorf("jsonrpc request failed: %w", err)
+	} else if isActive == nil {
+		return false, fmt.Errorf("unknown response nil")
 	}
 
 	return *isActive, nil
@@ -87,6 +85,8 @@ func deactivateSequencer(sequencer string) (string, error) {
 	unsafeHash, err := jsonRPCSend[string]("admin_stopSequencer", []string{}, sequencer)
 	if err != nil {
 		return "", fmt.Errorf("jsonrpc request failed: %w", err)
+	} else if unsafeHash == nil {
+		return "", fmt.Errorf("unknown response nil")
 	}
 
 	return *unsafeHash, nil
@@ -104,6 +104,8 @@ func getUnsafeL2Status(sequencer string) (string, int64, error) {
 	}]("optimism_syncStatus", []string{}, sequencer)
 	if err != nil {
 		return "", 0, fmt.Errorf("jsonrpc request failed: %w", err)
+	} else if syncStatus == nil {
+		return "", 0, fmt.Errorf("unknown response nil")
 	}
 
 	return syncStatus.UnsafeL2.Hash, syncStatus.UnsafeL2.Number, nil // unsafe hash
