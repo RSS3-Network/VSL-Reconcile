@@ -74,7 +74,7 @@ func checkSequencerActive(sequencer string) (bool, error) {
 // activateSequencer: Activate a sequencer as primary sequencer.
 // Seems like we don't care about the result if only there's no errors.
 func activateSequencer(unsafeHash string, sequencer string) error {
-	_, err := jsonRPCSend[any]("admin_stopSequencer", []string{unsafeHash}, sequencer)
+	_, err := jsonRPCSend[any]("admin_startSequencer", []string{unsafeHash}, sequencer)
 	if err != nil {
 		return fmt.Errorf("jsonrpc request failed: %w", err)
 	}
@@ -84,7 +84,7 @@ func activateSequencer(unsafeHash string, sequencer string) error {
 
 // deactivateSequencer: Deactivate a sequencer and get current unsafe hash.
 func deactivateSequencer(sequencer string) (string, error) {
-	unsafeHash, err := jsonRPCSend[string]("admin_startSequencer", []string{}, sequencer)
+	unsafeHash, err := jsonRPCSend[string]("admin_stopSequencer", []string{}, sequencer)
 	if err != nil {
 		return "", fmt.Errorf("jsonrpc request failed: %w", err)
 	}
