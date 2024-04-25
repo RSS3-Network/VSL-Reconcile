@@ -99,12 +99,12 @@ func getOPSyncStatus(sequencer string) (string, int64, bool, error) {
 			Hash       string    `json:"hash"`
 			Number     int       `json:"number"`
 			ParentHash string    `json:"parentHash"`
-			Timestamp  time.Time `json:"timestamp"` // Used for check if sequencer is ready ( 12s * 3 )
+			Timestamp  time.Time `json:"timestamp"` // For check if sequencer is ready to be activated ( 12s * 3 )
 		} `json:"head_l1"`
 		UnsafeL2 struct {
-			Hash      string    `json:"hash"`
-			Number    int64     `json:"number"`
-			Timestamp time.Time `json:"timestamp"`
+			Hash   string `json:"hash"`
+			Number int64  `json:"number"`
+			//Timestamp time.Time `json:"timestamp"` // Not for isReady status reference
 		} `json:"unsafe_l2"`
 	}]("optimism_syncStatus", []string{}, sequencer)
 	if err != nil {
