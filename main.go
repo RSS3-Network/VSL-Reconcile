@@ -56,6 +56,9 @@ func activateSequencerWithFirstID(firstID int, unsafeHash string, sequencersList
 }
 
 func main() {
+	// Initialize
+	log.Printf("initializing...")
+
 	// Read sequencers list from environment variable (comma-separated)
 	sequencersListStr := os.Getenv("SEQUENCERS_LIST")
 	if sequencersListStr == "" {
@@ -88,12 +91,13 @@ func main() {
 	}
 
 	// Determine which sequencer is primary
+	log.Printf("determine current primary sequencer...")
 	primarySequencerID := -1
 	for id, sequencer := range sequencersList {
 		isActive, err := checkSequencerActive(sequencer)
 		if err != nil {
 			// Failed to get sequencer status
-			log.Printf("failed to get sequencer status: %v", err)
+			log.Printf("failed to get sequencer (#%d %s) status: %v", id, sequencer, err)
 			continue
 		}
 
@@ -101,12 +105,14 @@ func main() {
 			// Will this be the primary sequencer?
 			if primarySequencerID == -1 {
 				// Set as primary sequencer
+				log.Printf("found sequencer (#%d %s) as primary", id, sequencer)
 				primarySequencerID = id
 			} else {
 				// Already have a primary sequencer, deactivate this to prevent conflict (poor optimism)
+				log.Printf("another sequencer is already active, deactivating this sequencer (#%d %s)...", id, sequencer)
 				_, err := deactivateSequencer(sequencer) // ignore unsafe hash
 				if err != nil {
-					log.Printf("failed to deactivate another active sequencer: %v", err)
+					log.Printf("failed to deactivate another active sequencer (#%d %s): %v", id, sequencer, err)
 				}
 			}
 		}
@@ -114,14 +120,18 @@ func main() {
 
 	// If neither of these sequencers are primary, try to promote one
 	if primarySequencerID == -1 {
+		log.Printf("no primary sequencer found, start promote progress...")
 		primarySequencerID = activateSequencerWithFirstID(0, "", sequencersList)
 		if primarySequencerID == -1 {
 			// All sequencer activate fail
-			log.Fatalf("failed to activate any sequencer")
+			log.Fatalf("failed to activate any sequencers")
+		} else {
+			log.Printf("sequencer (#%d %s) is now primary.", primarySequencerID, sequencersList[primarySequencerID])
 		}
 	}
 
 	// Start routine
+	log.Printf("start heartbeat routine...")
 	t := time.NewTicker(checkInterval)
 
 	currentBlockTime := time.Now()
@@ -139,36 +149,50 @@ func main() {
 			log.Printf("primary sequencer is not active, switching...")
 		} else {
 			// Let's check the block height
+			log.Printf("start check current block height")
 			_, blockHeight, err := getUnsafeL2Status(sequencersList[primarySequencerID])
 			if err != nil {
-				log.Printf("failed to get unsafe L2 status from primary sequencer: %v", err)
+				log.Printf("failed to get unsafe L2 status from primary sequencer (#%d %s): %v", primarySequencerID, sequencersList[primarySequencerID], err)
+				// Then see this sequencer as working abnormally, proceed to restart it
+			} else {
+				// Regard this request as successful and blockHeight is real
+				if blockHeight > currentBlockHeight {
+					// Say hi to our new block
+					log.Printf("new block height found, reset tolerate timer")
+					currentBlockTime = time.Now()
+					currentBlockHeight = blockHeight
+					continue // nothing else to do, wait for next round as this sequencer should be fine
+				} else {
+					// equal or even less than, check max block delay
+					if time.Now().Sub(currentBlockTime) <= maxBlockTime {
+						// Within acceptable limit, proceed too
+						log.Printf("still old blocks, but it's fine")
+						continue
+					} else {
+						// we can't tolerate this, gear up and let's restart the sequencer!
+						log.Printf("block time exceeds maximal tolerance, this sequencer might working abnormally, trying to restart it...")
+					}
+				}
 			}
 
-			if blockHeight > currentBlockHeight {
-				// Say hi to our new block
-				currentBlockTime = time.Now()
-				currentBlockHeight = blockHeight
-				continue
-			} else {
-				// equal or even less than, check max block delay
-				if time.Now().Sub(currentBlockTime) <= maxBlockTime {
-					// Within acceptable limit, proceed
-					continue
-				} // else we can't tolerate this, gear up and let's restart the sequencer!
-			}
 		}
 
 		// If current sequencer is working abnormally, promote next sequencer as primary
+		log.Printf("for some reason the current primary sequencer (#%d %s) is not working, we have to promote a new primary.", primarySequencerID, sequencersList[primarySequencerID])
 		// 1. deactivate this sequencer
+		log.Printf("first let's try to shutdown it")
 		unsafeHash, err := deactivateSequencer(sequencersList[primarySequencerID])
 		if err != nil {
 			log.Printf("failed to deactivate sequencer (%d): %v", primarySequencerID, err)
 		}
 
 		// 2. activate a new sequencer
+		log.Printf("then let's find it's successor")
 		primarySequencerID = activateSequencerWithFirstID(primarySequencerID+1, unsafeHash, sequencersList)
 		if primarySequencerID == -1 {
 			log.Fatalf("failed to activate any sequencer")
+		} else {
+			log.Printf("sequencer (#%d %s) is now primary.", primarySequencerID, sequencersList[primarySequencerID])
 		}
 
 	}
