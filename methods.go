@@ -37,10 +37,7 @@ func jsonRPCSend[T any](method string, params []string, rpcEndpoint string) (*T,
 		return nil, fmt.Errorf("execute request: %w", err)
 	}
 
-	var resObj struct {
-		JSONRPCResponseBase
-		Result *T `json:"result"`
-	}
+	var resObj JSONRPCResponse[T]
 
 	err = json.NewDecoder(res.Body).Decode(&resObj)
 	_ = res.Body.Close() // Close to prevent memory leak

@@ -7,11 +7,12 @@ type JSONRPCRequestData struct {
 	ID      uint     `json:"id"` // Request ID
 }
 
-type JSONRPCResponseBase struct {
+type JSONRPCResponse[T any] struct {
 	Version string    `json:"jsonrpc"` // 2.0
 	ID      uint      `json:"id"`      // Request ID
 	Error   *struct { // Possible error
 		Code    int    `json:"code"`
 		Message string `json:"message"`
 	} `json:"error"`
+	Result *T `json:"result"`
 }
