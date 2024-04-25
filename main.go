@@ -148,7 +148,7 @@ func main() {
 		} else if !isActive {
 			log.Printf("primary sequencer is not active, switching...")
 		} else {
-			// Let's check the block height
+			// Primary sequencer is active, let's check the block height
 			log.Printf("start check current block height")
 			_, blockHeight, err := getUnsafeL2Status(sequencersList[primarySequencerID])
 			if err != nil {
