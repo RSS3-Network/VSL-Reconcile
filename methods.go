@@ -15,7 +15,7 @@ func jsonRPCSend[T any](method string, params []string, rpcEndpoint string) (*T,
 		Version: "2.0",
 		Method:  method,
 		Params:  params,
-		ID:      1, // Unimportant in JSON-RPC calls. For WS-RPC calls, this is important.
+		ID:      1, // Only important for WS-RPC calls.
 	}
 
 	reqDataBytes, err := json.Marshal(&reqData)
@@ -52,7 +52,8 @@ func jsonRPCSend[T any](method string, params []string, rpcEndpoint string) (*T,
 	return resObj.Result, nil
 }
 
-// checkSequencerActive: Check if a sequencer is in active state , packing blocks and send them to L1.
+// checkSequencerActive: Check if a sequencer is in active state
+// {"jsonrpc":"2.0","id":1,"result":true} or {"jsonrpc":"2.0","id":1,"result":false}
 // Sequencer can have some other status like just syncing as backup node, in which case it might print error like
 // {"jsonrpc":"2.0","id":1,"error":{"code":-32601,"message":"the method admin_sequencerActive does not exist/is not available"}}
 func checkSequencerActive(sequencer string) (bool, error) {
