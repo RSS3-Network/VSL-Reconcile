@@ -19,6 +19,9 @@ jobs:
         platform:
           - linux/amd64
 #          - linux/arm64
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Prepare
         run: |
