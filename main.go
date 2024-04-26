@@ -189,7 +189,7 @@ func main() {
 
 		}
 
-		// If current sequencer is working abnormally, promote next sequencer as primary
+		// If current sequencer is working abnormally, try to restart it before promote next sequencer as primary
 		log.Printf("for some reason the current primary sequencer (#%d %s) is not working, we have to promote a new primary.", primarySequencerID, sequencersList[primarySequencerID])
 		// 1. deactivate this sequencer
 		log.Printf("first let's try to shutdown it")
@@ -200,7 +200,7 @@ func main() {
 
 		// 2. activate a new sequencer
 		log.Printf("then let's find it's successor")
-		primarySequencerID = activateSequencerWithFirstID(primarySequencerID+1, unsafeHash, sequencersList)
+		primarySequencerID = activateSequencerWithFirstID(primarySequencerID, unsafeHash, sequencersList)
 		if primarySequencerID == -1 {
 			log.Fatalf("failed to activate any sequencer")
 		} else {
