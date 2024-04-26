@@ -82,7 +82,7 @@ func main() {
 	// Parse check interval
 	checkIntervalStr := os.Getenv("CHECK_INTERVAL")
 	if checkIntervalStr == "" {
-		checkIntervalStr = "1s" // Default set as +1s
+		checkIntervalStr = "10s" // Default set as 10s
 	}
 
 	checkInterval, err := time.ParseDuration(checkIntervalStr)
