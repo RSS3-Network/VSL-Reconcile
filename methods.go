@@ -96,15 +96,15 @@ func deactivateSequencer(sequencer string) (string, error) {
 func getOPSyncStatus(sequencer string) (string, int64, bool, error) {
 	syncStatus, err := jsonRPCCall[struct { // Ignore irrelevant fields
 		HeadL1 struct {
-			Hash       string    `json:"hash"`
-			Number     int       `json:"number"`
-			ParentHash string    `json:"parentHash"`
-			Timestamp  time.Time `json:"timestamp"` // For check if sequencer is ready to be activated ( 12s * 3 )
+			// Hash       string `json:"hash"`
+			// Number     int    `json:"number"`
+			// ParentHash string `json:"parentHash"`
+			Timestamp int64 `json:"timestamp"` // For check if sequencer is ready to be activated ( 12s * 3 )
 		} `json:"head_l1"`
 		UnsafeL2 struct {
 			Hash   string `json:"hash"`
 			Number int64  `json:"number"`
-			//Timestamp time.Time `json:"timestamp"` // Not for isReady status reference
+			//Timestamp int64 `json:"timestamp"` // Not for isReady status reference
 		} `json:"unsafe_l2"`
 	}]("optimism_syncStatus", []string{}, sequencer)
 	if err != nil {
@@ -114,6 +114,6 @@ func getOPSyncStatus(sequencer string) (string, int64, bool, error) {
 	}
 
 	return syncStatus.UnsafeL2.Hash, syncStatus.UnsafeL2.Number, // unsafe hash
-		time.Now().Sub(syncStatus.HeadL1.Timestamp) < MaxMainnetBlockTimestampLateTolerance, // is sequencer sync with mainnet (max tolerance 3 blocks behind) and ready to be activated
+		time.Now().Unix()-syncStatus.HeadL1.Timestamp < MaxMainnetBlockTimestampLateTolerance, // is sequencer sync with mainnet (max tolerance 3 blocks behind) and ready to be activated
 		nil
 }
