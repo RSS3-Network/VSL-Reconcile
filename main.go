@@ -11,6 +11,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -66,15 +67,12 @@ func activateSequencerWithFirstID(firstID int, unsafeHash string, sequencersList
 	return -1 // Everyone has tried, and they all failed
 }
 
-func main() {
-	// Initialize
-	log.Printf("initializing...")
-
+func InitializeConfigurations() ([]string, time.Duration, time.Duration, error) {
 	// Read sequencers list from environment variable (comma-separated)
 	sequencersListStr := os.Getenv("SEQUENCERS_LIST")
 	if sequencersListStr == "" {
 		// No sequencers specified, panic
-		log.Fatalf("no sequencers specified")
+		return nil, 0, 0, fmt.Errorf("no sequencers specified")
 	}
 
 	sequencersList := strings.Split(sequencersListStr, ",")
@@ -87,7 +85,7 @@ func main() {
 
 	checkInterval, err := time.ParseDuration(checkIntervalStr)
 	if err != nil {
-		log.Fatalf("failed to parse check interval str (%s): %v", checkIntervalStr, err)
+		return nil, 0, 0, fmt.Errorf("failed to parse check interval str (%s): %w", checkIntervalStr, err)
 	}
 
 	// Parse max block time (how long can we tolerate if the block number doesn't increase)
@@ -98,11 +96,15 @@ func main() {
 
 	maxBlockTime, err := time.ParseDuration(maxBlockTimeStr)
 	if err != nil {
-		log.Fatalf("failed to parse max block time str (%s): %v", maxBlockTimeStr, err)
+		return nil, 0, 0, fmt.Errorf("failed to parse max block time str (%s): %w", maxBlockTimeStr, err)
 	}
 
+	return sequencersList, checkInterval, maxBlockTime, nil
+}
+
+func Bootstrap(sequencersList []string) (int, error) {
 	// Determine which sequencer is primary
-	log.Printf("determine current primary sequencer...")
+	log.Printf("determine current primary sequencer")
 	primarySequencerID := -1
 	for id, sequencer := range sequencersList {
 		isActive, err := checkSequencerActive(sequencer)
@@ -135,14 +137,16 @@ func main() {
 		primarySequencerID = activateSequencerWithFirstID(0, "", sequencersList)
 		if primarySequencerID == -1 {
 			// All sequencer activate fail
-			log.Fatalf("failed to activate any sequencers")
+			return -1, fmt.Errorf("failed to activate any sequencers")
 		} else {
 			log.Printf("sequencer (#%d %s) is now primary.", primarySequencerID, sequencersList[primarySequencerID])
 		}
 	}
 
-	// Start routine
-	log.Printf("start heartbeat routine...")
+	return primarySequencerID, nil
+}
+
+func HeartbeatLoop(sequencersList []string, primarySequencerID int, checkInterval time.Duration, maxBlockTime time.Duration) {
 	t := time.NewTicker(checkInterval)
 
 	currentBlockTime := time.Now()
@@ -208,5 +212,24 @@ func main() {
 		}
 
 	}
+}
 
+func main() {
+	// Initialize
+	log.Printf("start initialize")
+	sequencersList, checkInterval, maxBlockTime, err := InitializeConfigurations()
+	if err != nil {
+		log.Fatalf("initialize failed: %v", err)
+	}
+
+	// Bootstrap
+	log.Printf("start bootstrap")
+	primarySequencerID, err := Bootstrap(sequencersList)
+	if err != nil {
+		log.Fatalf("bootstrap failed: %v", err)
+	}
+
+	// Start heartbeat loop
+	log.Printf("start heartbeat loop")
+	HeartbeatLoop(sequencersList, primarySequencerID, checkInterval, maxBlockTime)
 }
