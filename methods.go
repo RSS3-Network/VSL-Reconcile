@@ -31,7 +31,7 @@ func jsonRPCCall[T any](method string, params []string, rpcEndpoint string) (*T,
 	req.Header.Set("Content-Type", "application/json")
 
 	res, err := (&http.Client{
-		Timeout: 1 * time.Second,
+		Timeout: JSONRPCCallRequestTimeout,
 	}).Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("execute request: %w", err)
