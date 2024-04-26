@@ -54,7 +54,7 @@ func activateSequencerWithFirstID(firstID int, unsafeHash string, sequencersList
 			unsafeHashEnsure = unsafeHashResponse
 		}
 
-		err = activateSequencer(sequencersList[id], unsafeHash)
+		err = activateSequencer(sequencersList[id], unsafeHashEnsure)
 		if err != nil {
 			log.Printf("failed to activate sequencer (%d): %v", id, err)
 			_, _ = deactivateSequencer(sequencersList[id]) // Ensure this sequencer is deactivated even it failed to activate
