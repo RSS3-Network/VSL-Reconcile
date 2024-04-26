@@ -10,46 +10,62 @@ import (
 
 // jsonRPCCall: The function wraps method and params to JSON RPC call format, and then send to rpcEndpoint .
 func jsonRPCCall[T any](method string, params []string, rpcEndpoint string) (*T, error) {
+	var failCount = 0
+	var returnErr error
 
-	reqData := JSONRPCRequestData{
-		Version: "2.0",
-		Method:  method,
-		Params:  params,
-		ID:      1, // Only important for WS-RPC calls.
+	for failCount < JSONRPCCallFailRetry {
+		if failCount > 0 {
+			time.Sleep(JSONRPCCallRequestTimeout)
+		}
+
+		failCount++
+
+		reqData := JSONRPCRequestData{
+			Version: "2.0",
+			Method:  method,
+			Params:  params,
+			ID:      1, // Only important for WS-RPC calls.
+		}
+
+		reqDataBytes, err := json.Marshal(&reqData)
+		if err != nil {
+			returnErr = fmt.Errorf("marshal request data: %w", err)
+			continue
+		}
+
+		req, err := http.NewRequest("POST", rpcEndpoint, bytes.NewBuffer(reqDataBytes))
+		if err != nil {
+			returnErr = fmt.Errorf("initialize request: %w", err)
+			continue
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+
+		res, err := (&http.Client{
+			Timeout: JSONRPCCallRequestTimeout,
+		}).Do(req)
+		if err != nil {
+			returnErr = fmt.Errorf("execute request: %w", err)
+			continue
+		}
+
+		var resObj JSONRPCResponse[T]
+
+		err = json.NewDecoder(res.Body).Decode(&resObj)
+		_ = res.Body.Close() // Close to prevent memory leak
+		if err != nil {
+			returnErr = fmt.Errorf("decode response: %w", err)
+		}
+
+		if resObj.Error != nil {
+			returnErr = fmt.Errorf("request error %d: %s", resObj.Error.Code, resObj.Error.Message)
+		}
+
+		// Success
+		return resObj.Result, nil
 	}
 
-	reqDataBytes, err := json.Marshal(&reqData)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request data: %w", err)
-	}
-
-	req, err := http.NewRequest("POST", rpcEndpoint, bytes.NewBuffer(reqDataBytes))
-	if err != nil {
-		return nil, fmt.Errorf("initialize request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-
-	res, err := (&http.Client{
-		Timeout: JSONRPCCallRequestTimeout,
-	}).Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("execute request: %w", err)
-	}
-
-	var resObj JSONRPCResponse[T]
-
-	err = json.NewDecoder(res.Body).Decode(&resObj)
-	_ = res.Body.Close() // Close to prevent memory leak
-	if err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
-	}
-
-	if resObj.Error != nil {
-		return nil, fmt.Errorf("request error %d: %s", resObj.Error.Code, resObj.Error.Message)
-	}
-
-	return resObj.Result, nil
+	return nil, returnErr
 }
 
 // checkSequencerActive: Check if a sequencer is in active state

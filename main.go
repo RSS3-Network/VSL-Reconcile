@@ -80,7 +80,7 @@ func InitializeConfigurations() ([]string, time.Duration, time.Duration, error) 
 	// Parse check interval
 	checkIntervalStr := os.Getenv("CHECK_INTERVAL")
 	if checkIntervalStr == "" {
-		checkIntervalStr = "10s" // Default set as 10s
+		checkIntervalStr = DefaultCheckInterval
 	}
 
 	checkInterval, err := time.ParseDuration(checkIntervalStr)
@@ -91,7 +91,7 @@ func InitializeConfigurations() ([]string, time.Duration, time.Duration, error) 
 	// Parse max block time (how long can we tolerate if the block number doesn't increase)
 	maxBlockTimeStr := os.Getenv("MAX_BLOCK_TIME")
 	if maxBlockTimeStr == "" {
-		maxBlockTimeStr = "30s" // Default set as 30s
+		maxBlockTimeStr = DefaultMaxBlockTime
 	}
 
 	maxBlockTime, err := time.ParseDuration(maxBlockTimeStr)
@@ -147,15 +147,10 @@ func Bootstrap(sequencersList []string) (int, error) {
 }
 
 func HeartbeatLoop(sequencersList []string, primarySequencerID int, checkInterval time.Duration, maxBlockTime time.Duration) {
-	t := time.NewTicker(checkInterval)
-
 	currentBlockTime := time.Now()
 	currentBlockHeight := int64(0)
 
 	for {
-		// Wait for ticker
-		<-t.C
-
 		// Check for sequencer status
 		isActive, err := checkSequencerActive(sequencersList[primarySequencerID])
 		if err != nil {
@@ -211,6 +206,7 @@ func HeartbeatLoop(sequencersList []string, primarySequencerID int, checkInterva
 			log.Printf("sequencer (#%d %s) is now primary.", primarySequencerID, sequencersList[primarySequencerID])
 		}
 
+		time.Sleep(checkInterval)
 	}
 }
 
