@@ -222,6 +222,11 @@ func main() {
 		log.Fatalf("initialize failed: %v", err)
 	}
 
+	log.Printf("start with %d sequencers, heartbeat interval %ds, timeout %ds", len(sequencersList), checkInterval/time.Second, maxBlockTime/time.Second)
+	for id, sequencer := range sequencersList {
+		log.Printf("sequencer %d: %s", id, sequencer)
+	}
+
 	// Bootstrap
 	log.Printf("start bootstrap")
 	primarySequencerID, err := Bootstrap(sequencersList)
