@@ -151,6 +151,8 @@ func HeartbeatLoop(sequencersList []string, primarySequencerID int, checkInterva
 	currentBlockHeight := int64(0)
 
 	for {
+		time.Sleep(checkInterval)
+
 		// Check for sequencer status
 		isActive, err := checkSequencerActive(sequencersList[primarySequencerID])
 		if err != nil {
@@ -205,8 +207,6 @@ func HeartbeatLoop(sequencersList []string, primarySequencerID int, checkInterva
 		} else {
 			log.Printf("sequencer (#%d %s) is now primary.", primarySequencerID, sequencersList[primarySequencerID])
 		}
-
-		time.Sleep(checkInterval)
 	}
 }
 
