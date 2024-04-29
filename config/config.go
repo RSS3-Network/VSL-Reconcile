@@ -22,14 +22,17 @@ func InitializeConfigurations() ([]string, time.Duration, time.Duration, error) 
 	if discoverySTS == "" {
 		return nil, 0, 0, fmt.Errorf("statefulset name is not provided")
 	}
+
 	discoveryNS := os.Getenv(EnvDiscoveryNS)
 	if discoveryNS == "" {
 		discoveryNS = "default"
 	}
+
 	clientset, err := initKubeClient()
 	if err != nil {
 		return nil, 0, 0, fmt.Errorf("failed to initialize kubernetes client: %w", err)
 	}
+
 	sequencersList, err := DiscoverStsEndpoints(clientset, discoverySTS, discoveryNS)
 	if err != nil {
 		return nil, 0, 0, fmt.Errorf("failed to discover sequencers: %w", err)
