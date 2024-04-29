@@ -1,4 +1,4 @@
-package main
+package rpc
 
 type JSONRPCRequestData struct {
 	Version string   `json:"jsonrpc"` // 2.0

@@ -14,17 +14,17 @@ RUN go mod download
 COPY . .
 
 # Build image
-RUN go build -o app .
+RUN go build -o app cmd/main.go
 
 FROM scratch AS Runner
 
 WORKDIR /app
 
-COPY --from=Builder /app/app /app/app
+COPY --from=Builder /app/app /app/watchdog
 
 VOLUME /app/data
 
 ENV MODE=prod
 
 # Run the executable
-CMD ["/app/app"]
+ENTRYPOINT ["/app/watchdog"]

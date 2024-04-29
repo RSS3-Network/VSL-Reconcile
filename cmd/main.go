@@ -13,8 +13,8 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
-	"strings"
+	"sequencer-watchdog/config"
+	"sequencer-watchdog/internal/rpc"
 	"time"
 )
 
@@ -38,7 +38,7 @@ func activateSequencerWithFirstID(firstID int, unsafeHash string, sequencersList
 			isSequencerReady   bool
 			unsafeHashResponse string
 		)
-		unsafeHashResponse, _, isSequencerReady, err = getOPSyncStatus(sequencersList[id])
+		unsafeHashResponse, _, isSequencerReady, err = rpc.GetOPSyncStatus(sequencersList[id])
 		if err != nil {
 			log.Printf("failed to get unsafe hash from sequencer (%d): %v", id, err)
 			continue // Proceed to next sequencer
@@ -54,10 +54,10 @@ func activateSequencerWithFirstID(firstID int, unsafeHash string, sequencersList
 			unsafeHashEnsure = unsafeHashResponse
 		}
 
-		err = activateSequencer(sequencersList[id], unsafeHashEnsure)
+		err = rpc.ActivateSequencer(sequencersList[id], unsafeHashEnsure)
 		if err != nil {
 			log.Printf("failed to activate sequencer (%d): %v", id, err)
-			_, _ = deactivateSequencer(sequencersList[id]) // Ensure this sequencer is deactivated even it failed to activate
+			_, _ = rpc.DeactivateSequencer(sequencersList[id]) // Ensure this sequencer is deactivated even it failed to activate
 		} else {
 			return id // That's it, our new king
 		}
@@ -67,47 +67,12 @@ func activateSequencerWithFirstID(firstID int, unsafeHash string, sequencersList
 	return -1 // Everyone has tried, and they all failed
 }
 
-func InitializeConfigurations() ([]string, time.Duration, time.Duration, error) {
-	// Read sequencers list from environment variable (comma-separated)
-	sequencersListStr := os.Getenv("SEQUENCERS_LIST")
-	if sequencersListStr == "" {
-		// No sequencers specified, panic
-		return nil, 0, 0, fmt.Errorf("no sequencers specified")
-	}
-
-	sequencersList := strings.Split(sequencersListStr, ",")
-
-	// Parse check interval
-	checkIntervalStr := os.Getenv("CHECK_INTERVAL")
-	if checkIntervalStr == "" {
-		checkIntervalStr = DefaultCheckInterval
-	}
-
-	checkInterval, err := time.ParseDuration(checkIntervalStr)
-	if err != nil {
-		return nil, 0, 0, fmt.Errorf("failed to parse check interval str (%s): %w", checkIntervalStr, err)
-	}
-
-	// Parse max block time (how long can we tolerate if the block number doesn't increase)
-	maxBlockTimeStr := os.Getenv("MAX_BLOCK_TIME")
-	if maxBlockTimeStr == "" {
-		maxBlockTimeStr = DefaultMaxBlockTime
-	}
-
-	maxBlockTime, err := time.ParseDuration(maxBlockTimeStr)
-	if err != nil {
-		return nil, 0, 0, fmt.Errorf("failed to parse max block time str (%s): %w", maxBlockTimeStr, err)
-	}
-
-	return sequencersList, checkInterval, maxBlockTime, nil
-}
-
 func Bootstrap(sequencersList []string) (int, error) {
 	// Determine which sequencer is primary
 	log.Printf("determine current primary sequencer")
 	primarySequencerID := -1
 	for id, sequencer := range sequencersList {
-		isActive, err := checkSequencerActive(sequencer)
+		isActive, err := rpc.CheckSequencerActive(sequencer)
 		if err != nil {
 			// Failed to get sequencer status
 			log.Printf("failed to get sequencer (#%d %s) status: %v", id, sequencer, err)
@@ -123,7 +88,7 @@ func Bootstrap(sequencersList []string) (int, error) {
 			} else {
 				// Already have a primary sequencer, deactivate this to prevent conflict (poor optimism)
 				log.Printf("another sequencer is already active, deactivating this sequencer (#%d %s)...", id, sequencer)
-				_, err := deactivateSequencer(sequencer) // ignore unsafe hash
+				_, err = rpc.DeactivateSequencer(sequencer) // ignore unsafe hash
 				if err != nil {
 					log.Printf("failed to deactivate another active sequencer (#%d %s): %v", id, sequencer, err)
 				}
@@ -154,7 +119,7 @@ func HeartbeatLoop(sequencersList []string, primarySequencerID int, checkInterva
 		time.Sleep(checkInterval)
 
 		// Check for sequencer status
-		isActive, err := checkSequencerActive(sequencersList[primarySequencerID])
+		isActive, err := rpc.CheckSequencerActive(sequencersList[primarySequencerID])
 		if err != nil {
 			log.Printf("failed to check primary sequencer status: %v", err)
 		} else if !isActive {
@@ -162,7 +127,7 @@ func HeartbeatLoop(sequencersList []string, primarySequencerID int, checkInterva
 		} else {
 			// Primary sequencer is active, let's check the block height
 			log.Printf("start check current block height")
-			_, blockHeight, _, err := getOPSyncStatus(sequencersList[primarySequencerID])
+			_, blockHeight, _, err := rpc.GetOPSyncStatus(sequencersList[primarySequencerID])
 			if err != nil {
 				log.Printf("failed to get unsafe L2 status from primary sequencer (#%d %s): %v", primarySequencerID, sequencersList[primarySequencerID], err)
 				// Then see this sequencer as working abnormally, proceed to restart it
@@ -194,7 +159,7 @@ func HeartbeatLoop(sequencersList []string, primarySequencerID int, checkInterva
 		log.Printf("for some reason the current primary sequencer (#%d %s) is not working, we have to promote a new primary.", primarySequencerID, sequencersList[primarySequencerID])
 		// 1. deactivate this sequencer
 		log.Printf("first let's try to shutdown it")
-		unsafeHash, err := deactivateSequencer(sequencersList[primarySequencerID])
+		unsafeHash, err := rpc.DeactivateSequencer(sequencersList[primarySequencerID])
 		if err != nil {
 			log.Printf("failed to deactivate sequencer (%d): %v", primarySequencerID, err)
 		}
@@ -213,7 +178,7 @@ func HeartbeatLoop(sequencersList []string, primarySequencerID int, checkInterva
 func main() {
 	// Initialize
 	log.Printf("start initialize")
-	sequencersList, checkInterval, maxBlockTime, err := InitializeConfigurations()
+	sequencersList, checkInterval, maxBlockTime, err := config.InitializeConfigurations()
 	if err != nil {
 		log.Fatalf("initialize failed: %v", err)
 	}

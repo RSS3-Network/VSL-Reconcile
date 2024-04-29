@@ -1,4 +1,4 @@
-package main
+package rpc
 
 import (
 	"bytes"
@@ -68,11 +68,11 @@ func jsonRPCCall[T any](method string, params []string, rpcEndpoint string) (*T,
 	return nil, returnErr
 }
 
-// checkSequencerActive: Check if a sequencer is in active state
+// CheckSequencerActive : Check if a sequencer is in active state
 // {"jsonrpc":"2.0","id":1,"result":true} or {"jsonrpc":"2.0","id":1,"result":false}
 // Sequencer can have some other status like just syncing as backup node, in which case it might print error like
 // {"jsonrpc":"2.0","id":1,"error":{"code":-32601,"message":"the method admin_sequencerActive does not exist/is not available"}}
-func checkSequencerActive(sequencer string) (bool, error) {
+func CheckSequencerActive(sequencer string) (bool, error) {
 	isActive, err := jsonRPCCall[bool]("admin_sequencerActive", []string{}, sequencer)
 	if err != nil {
 		return false, fmt.Errorf("jsonrpc request failed: %w", err)
@@ -83,9 +83,9 @@ func checkSequencerActive(sequencer string) (bool, error) {
 	return *isActive, nil
 }
 
-// activateSequencer: Activate a sequencer as primary sequencer.
+// ActivateSequencer : Activate a sequencer as primary sequencer.
 // Seems like we don't care about the result if only there's no errors.
-func activateSequencer(sequencer string, unsafeHash string) error {
+func ActivateSequencer(sequencer string, unsafeHash string) error {
 	_, err := jsonRPCCall[any]("admin_startSequencer", []string{unsafeHash}, sequencer)
 	if err != nil {
 		return fmt.Errorf("jsonrpc request failed: %w", err)
@@ -94,8 +94,8 @@ func activateSequencer(sequencer string, unsafeHash string) error {
 	return nil
 }
 
-// deactivateSequencer: Deactivate a sequencer and get current unsafe hash.
-func deactivateSequencer(sequencer string) (string, error) {
+// DeactivateSequencer : Deactivate a sequencer and get current unsafe hash.
+func DeactivateSequencer(sequencer string) (string, error) {
 	unsafeHash, err := jsonRPCCall[string]("admin_stopSequencer", []string{}, sequencer)
 	if err != nil {
 		return "", fmt.Errorf("jsonrpc request failed: %w", err)
@@ -106,10 +106,10 @@ func deactivateSequencer(sequencer string) (string, error) {
 	return *unsafeHash, nil
 }
 
-// getOPSyncStatus: Get unsafe L2 Head from op sync status.
+// GetOPSyncStatus : Get unsafe L2 Head from op sync status.
 // This shouldn't be common as we can get unsafe header from deactivation request,
 // but sometimes deactivation can fail. So use this as a fallback.
-func getOPSyncStatus(sequencer string) (string, int64, bool, error) {
+func GetOPSyncStatus(sequencer string) (string, int64, bool, error) {
 	syncStatus, err := jsonRPCCall[struct { // Ignore irrelevant fields
 		HeadL1 struct {
 			// Hash       string `json:"hash"`
