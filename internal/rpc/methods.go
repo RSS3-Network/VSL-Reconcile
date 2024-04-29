@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 // jsonRPCCall: The function wraps method and params to JSON RPC call format, and then send to rpcEndpoint .
 func jsonRPCCall[T any](method string, params []string, rpcEndpoint string) (*T, error) {
 	var failCount = 0
+
 	var returnErr error
 
 	for failCount < JSONRPCCallFailRetry {
@@ -33,7 +35,7 @@ func jsonRPCCall[T any](method string, params []string, rpcEndpoint string) (*T,
 			continue
 		}
 
-		req, err := http.NewRequest("POST", rpcEndpoint, bytes.NewBuffer(reqDataBytes))
+		req, err := http.NewRequestWithContext(context.Background(), "POST", rpcEndpoint, bytes.NewBuffer(reqDataBytes))
 		if err != nil {
 			returnErr = fmt.Errorf("initialize request: %w", err)
 			continue
@@ -53,12 +55,15 @@ func jsonRPCCall[T any](method string, params []string, rpcEndpoint string) (*T,
 
 		err = json.NewDecoder(res.Body).Decode(&resObj)
 		_ = res.Body.Close() // Close to prevent memory leak
+
 		if err != nil {
 			returnErr = fmt.Errorf("decode response: %w", err)
+			continue
 		}
 
 		if resObj.Error != nil {
 			returnErr = fmt.Errorf("request error %d: %s", resObj.Error.Code, resObj.Error.Message)
+			continue
 		}
 
 		// Success
@@ -120,7 +125,7 @@ func GetOPSyncStatus(sequencer string) (string, int64, bool, error) {
 		UnsafeL2 struct {
 			Hash   string `json:"hash"`
 			Number int64  `json:"number"`
-			//Timestamp int64 `json:"timestamp"` // Not for isReady status reference
+			// Timestamp int64 `json:"timestamp"` // Not for isReady status reference
 		} `json:"unsafe_l2"`
 	}]("optimism_syncStatus", []string{}, sequencer)
 	if err != nil {

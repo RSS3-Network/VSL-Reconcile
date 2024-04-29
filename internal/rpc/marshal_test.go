@@ -6,6 +6,7 @@ import (
 )
 
 func TestMarshalOPSyncStatus(t *testing.T) {
+	t.Parallel()
 
 	rpcResponse := `
 {
@@ -100,7 +101,7 @@ func TestMarshalOPSyncStatus(t *testing.T) {
 		UnsafeL2 struct {
 			Hash   string `json:"hash"`
 			Number int64  `json:"number"`
-			//Timestamp int64 `json:"timestamp"` // Not for isReady status reference
+			// Timestamp int64 `json:"timestamp"` // Not for isReady status reference
 		} `json:"unsafe_l2"`
 	}]
 
@@ -110,5 +111,4 @@ func TestMarshalOPSyncStatus(t *testing.T) {
 	}
 
 	t.Log(opSyncStatus.Result)
-
 }
