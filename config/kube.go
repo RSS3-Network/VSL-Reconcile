@@ -51,11 +51,11 @@ func initKubeClient() (*kubernetes.Clientset, error) {
 }
 
 // DiscoverStsEndpoints : Discover StatefulSet endpoints
-func DiscoverStsEndpoints(clientset *kubernetes.Clientset, name, namespace string) []string {
+func DiscoverStsEndpoints(clientset *kubernetes.Clientset, name, namespace string) ([]string, error) {
 	ctx := context.Background()
 	sts, err := clientset.AppsV1().StatefulSets(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	// get headless service
@@ -71,5 +71,5 @@ func DiscoverStsEndpoints(clientset *kubernetes.Clientset, name, namespace strin
 		endpoints = append(endpoints, ep)
 	}
 
-	return endpoints
+	return endpoints, nil
 }
