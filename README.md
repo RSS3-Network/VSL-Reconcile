@@ -30,3 +30,17 @@ the program then will switch the sequencer to another one.
 
 The default value of this is `30s`, feel free to adjust it. But since it's check is based on heartbeat loop,
 any value smaller than `CHECK_INTERVAL` might not work properly.
+
+## Kubernetes configuration
+
+To add more auth plugins, add below imports to `config/kube.go` :
+
+```go
+// Load all auth plugins
+_ "k8s.io/client-go/plugin/pkg/client/auth"
+
+// Load specific auth plugins
+_ "k8s.io/client-go/plugin/pkg/client/auth/azure"
+_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
+```
