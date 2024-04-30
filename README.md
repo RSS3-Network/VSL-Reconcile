@@ -1,4 +1,4 @@
-# VSL Sequencer reconcile
+# VSL Reconcile
 
 An external state management tool for OP sequencers
 

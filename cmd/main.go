@@ -32,12 +32,13 @@ var rootCmd = &cobra.Command{
 		}
 
 		providerAggregator := aggregator.New(
+			cfg,
 			&http.Service{},
 			&heartbeat.Service{},
 		)
 
 		routinesPool := safe.NewPool(context.Background())
-		server := server.NewServer(providerAggregator, cfg, routinesPool)
+		server := server.NewServer(providerAggregator, routinesPool)
 		server.Start()
 
 		server.Wait()

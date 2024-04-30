@@ -9,33 +9,30 @@ import (
 	"github.com/rss3-network/vsl-reconcile/config"
 	"github.com/rss3-network/vsl-reconcile/internal/rpc"
 	"github.com/rss3-network/vsl-reconcile/internal/safe"
+	"github.com/rss3-network/vsl-reconcile/pkg/kube"
 	"github.com/rss3-network/vsl-reconcile/pkg/service"
-	"k8s.io/client-go/kubernetes"
 )
 
 var _ service.Service = (*Service)(nil)
 
 type Service struct {
-	clientset *kubernetes.Clientset
+	sequencerList []string
+	checkInterval time.Duration
+	maxBlockTime  time.Duration
 }
 
-func (s *Service) Run(cfg *config.Config, pool *safe.Pool) error {
+func (s *Service) Run(pool *safe.Pool) error {
 	// Initialize
 	log.Printf("start initialize")
 
-	sequencerList, err := DiscoverStsEndpoints(s.clientset, cfg.DiscoverySTS, cfg.DiscoveryNS)
-	if err != nil {
-		return fmt.Errorf("failed to discover sequencers: %w", err)
-	}
-
-	for id, sequencer := range sequencerList {
+	for id, sequencer := range s.sequencerList {
 		log.Printf("sequencer %d: %s", id, sequencer)
 	}
 
 	// Bootstrap
 	log.Printf("start bootstrap")
 
-	primarySequencerID, err := Bootstrap(sequencerList)
+	primarySequencerID, err := Bootstrap(s.sequencerList)
 	if err != nil {
 		log.Fatalf("bootstrap failed: %v", err)
 	}
@@ -44,19 +41,26 @@ func (s *Service) Run(cfg *config.Config, pool *safe.Pool) error {
 	log.Printf("start heartbeat loop")
 
 	pool.GoCtx(func(_ context.Context) {
-		Loop(sequencerList, primarySequencerID, cfg.CheckInterval, cfg.MaxBlockTime)
+		s.Loop(primarySequencerID)
 	})
 
 	return nil
 }
 
-func (s *Service) Init() error {
-	clientset, err := initKubeClient()
+func (s *Service) Init(cfg *config.Config) error {
+	clientset, err := kube.Client()
 	if err != nil {
 		return fmt.Errorf("failed to initialize kubernetes client: %w", err)
 	}
 
-	s.clientset = clientset
+	sequencerList, err := DiscoverStsEndpoints(clientset, cfg.DiscoverySTS, cfg.DiscoveryNS)
+	if err != nil {
+		return fmt.Errorf("failed to discover sequencers: %w", err)
+	}
+
+	s.sequencerList = sequencerList
+	s.checkInterval = cfg.CheckInterval
+	s.maxBlockTime = cfg.MaxBlockTime
 
 	return nil
 }
@@ -159,15 +163,15 @@ func Bootstrap(sequencersList []string) (int, error) {
 	return primarySequencerID, nil
 }
 
-func Loop(sequencersList []string, primarySequencerID int, checkInterval time.Duration, maxBlockTime time.Duration) {
+func (s *Service) Loop(primarySequencerID int) {
 	currentBlockTime := time.Now()
 	currentBlockHeight := int64(0)
 
 	for {
-		time.Sleep(checkInterval)
+		time.Sleep(s.checkInterval)
 
 		// Check for sequencer status
-		isActive, err := rpc.CheckSequencerActive(sequencersList[primarySequencerID])
+		isActive, err := rpc.CheckSequencerActive(s.sequencerList[primarySequencerID])
 
 		switch {
 		case err != nil:
@@ -178,10 +182,10 @@ func Loop(sequencersList []string, primarySequencerID int, checkInterval time.Du
 			// Primary sequencer is active, let's check the block height
 			log.Printf("start check current block height")
 
-			_, blockHeight, _, err := rpc.GetOPSyncStatus(sequencersList[primarySequencerID])
+			_, blockHeight, _, err := rpc.GetOPSyncStatus(s.sequencerList[primarySequencerID])
 			if err != nil {
 				// Then see this sequencer as working abnormally, proceed to restart it
-				log.Printf("failed to get unsafe L2 status from primary sequencer (#%d %s): %v", primarySequencerID, sequencersList[primarySequencerID], err)
+				log.Printf("failed to get unsafe L2 status from primary sequencer (#%d %s): %v", primarySequencerID, s.sequencerList[primarySequencerID], err)
 			} else {
 				// Regard this request as successful and blockHeight is real
 				log.Printf("block height get, start compare")
@@ -197,7 +201,7 @@ func Loop(sequencersList []string, primarySequencerID int, checkInterval time.Du
 				}
 
 				// equal or even less than, check max block delay
-				if time.Since(currentBlockTime) <= maxBlockTime {
+				if time.Since(currentBlockTime) <= s.maxBlockTime {
 					// Within acceptable limit, proceed too
 					log.Printf("still old blocks, but it's fine")
 					continue
@@ -209,11 +213,11 @@ func Loop(sequencersList []string, primarySequencerID int, checkInterval time.Du
 		}
 
 		// If current sequencer is working abnormally, try to restart it before promote next sequencer as primary
-		log.Printf("for some reason the current primary sequencer (#%d %s) is not working, we have to promote a new primary.", primarySequencerID, sequencersList[primarySequencerID])
+		log.Printf("for some reason the current primary sequencer (#%d %s) is not working, we have to promote a new primary.", primarySequencerID, s.sequencerList[primarySequencerID])
 		// 1. deactivate this sequencer
 		log.Printf("first let's try to shutdown it")
 
-		unsafeHash, err := rpc.DeactivateSequencer(sequencersList[primarySequencerID])
+		unsafeHash, err := rpc.DeactivateSequencer(s.sequencerList[primarySequencerID])
 		if err != nil {
 			log.Printf("failed to deactivate sequencer (%d): %v", primarySequencerID, err)
 		}
@@ -221,11 +225,11 @@ func Loop(sequencersList []string, primarySequencerID int, checkInterval time.Du
 		// 2. activate a new sequencer
 		log.Printf("then let's find it's successor")
 
-		primarySequencerID = activateSequencerWithFirstID(primarySequencerID, unsafeHash, sequencersList)
+		primarySequencerID = activateSequencerWithFirstID(primarySequencerID, unsafeHash, s.sequencerList)
 		if primarySequencerID == -1 {
 			log.Fatalf("failed to activate any sequencer")
 		}
 
-		log.Printf("sequencer (#%d %s) is now primary.", primarySequencerID, sequencersList[primarySequencerID])
+		log.Printf("sequencer (#%d %s) is now primary.", primarySequencerID, s.sequencerList[primarySequencerID])
 	}
 }

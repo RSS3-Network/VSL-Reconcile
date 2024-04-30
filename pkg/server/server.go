@@ -3,7 +3,6 @@ package server
 import (
 	"log"
 
-	"github.com/rss3-network/vsl-reconcile/config"
 	"github.com/rss3-network/vsl-reconcile/internal/safe"
 	"github.com/rss3-network/vsl-reconcile/pkg/service"
 )
@@ -11,15 +10,13 @@ import (
 type Server struct {
 	serviceAggregator service.Service
 	routinesPool      *safe.Pool
-	config            *config.Config
 	stopChan          chan bool
 }
 
-func NewServer(svc service.Service, cfg *config.Config, pool *safe.Pool) *Server {
+func NewServer(svc service.Service, pool *safe.Pool) *Server {
 	s := &Server{
 		serviceAggregator: svc,
 		routinesPool:      pool,
-		config:            cfg,
 		stopChan:          make(chan bool, 1),
 	}
 
@@ -40,7 +37,7 @@ func (s *Server) Stop() {
 
 func (s *Server) startAggregator() {
 	safe.Go(func() {
-		err := s.serviceAggregator.Run(s.config, s.routinesPool)
+		err := s.serviceAggregator.Run(s.routinesPool)
 		if err != nil {
 			log.Fatalf("Error starting service aggregator: %v", err)
 		}

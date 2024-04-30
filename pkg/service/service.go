@@ -7,6 +7,6 @@ import (
 
 // Service defines methods of a service.
 type Service interface {
-	Run(cfg *config.Config, pool *safe.Pool) error
-	Init() error
+	Run(pool *safe.Pool) error
+	Init(cfg *config.Config) error
 }

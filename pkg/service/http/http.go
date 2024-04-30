@@ -15,7 +15,7 @@ type Service struct {
 	server *echo.Echo
 }
 
-func (s *Service) Run(_ *config.Config, pool *safe.Pool) error {
+func (s *Service) Run(pool *safe.Pool) error {
 	pool.GoCtx(func(ctx context.Context) {
 		err := s.server.Start(":8080")
 		if err != nil {
@@ -26,7 +26,7 @@ func (s *Service) Run(_ *config.Config, pool *safe.Pool) error {
 	return nil
 }
 
-func (s *Service) Init() error {
+func (s *Service) Init(_ *config.Config) error {
 	s.server = echo.New()
 	s.server.HideBanner = true
 	s.server.HidePort = true
