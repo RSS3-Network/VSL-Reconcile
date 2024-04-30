@@ -18,9 +18,9 @@ Please specify this parameter.
 
 ### CHECK_INTERVAL
 
-`CHECK_INTERVAL` is the interval setting for each heartbeat loop call. It has a default value of `1s` 
+`CHECK_INTERVAL` is the interval setting for each heartbeat loop call. It has a default value of `60s` 
 which represents heartbeat check is executed per second, if you don't need such high frequency,
-feel free to adjust this (like to `3s`).
+feel free to adjust this (like to `2m`).
 
 ### MAX_BLOCK_TIME
 
@@ -28,7 +28,7 @@ feel free to adjust this (like to `3s`).
 produce new blocks and finally the same block height has been kept too long to exceeds this value,
 the program then will switch the sequencer to another one.
 
-The default value of this is `30s`, feel free to adjust it. But since it's check is based on heartbeat loop,
+The default value of this is `5m`, feel free to adjust it. But since it's check is based on heartbeat loop,
 any value smaller than `CHECK_INTERVAL` might not work properly.
 
 ## Kubernetes configuration
