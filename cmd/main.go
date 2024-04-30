@@ -12,8 +12,6 @@ package main
 
 import (
 	"context"
-	"github.com/rss3-network/vsl-reconcile/pkg/service/label"
-	"log"
 
 	"github.com/rss3-network/vsl-reconcile/config"
 	"github.com/rss3-network/vsl-reconcile/internal/safe"
@@ -21,7 +19,13 @@ import (
 	"github.com/rss3-network/vsl-reconcile/pkg/service/aggregator"
 	"github.com/rss3-network/vsl-reconcile/pkg/service/heartbeat"
 	"github.com/rss3-network/vsl-reconcile/pkg/service/http"
+	"github.com/rss3-network/vsl-reconcile/pkg/service/label"
 	"github.com/spf13/cobra"
+	"go.uber.org/zap"
+)
+
+var (
+	debug bool
 )
 
 var rootCmd = &cobra.Command{
@@ -49,8 +53,18 @@ var rootCmd = &cobra.Command{
 	},
 }
 
+func init() {
+	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "enable debug mode")
+
+	if debug {
+		zap.ReplaceGlobals(zap.Must(zap.NewDevelopment()))
+	} else {
+		zap.ReplaceGlobals(zap.Must(zap.NewProduction()))
+	}
+}
+
 func main() {
 	if err := rootCmd.Execute(); err != nil {
-		log.Fatalf("failed to execute command: %v", err)
+		zap.L().Fatal("exec error:", zap.Error(err))
 	}
 }

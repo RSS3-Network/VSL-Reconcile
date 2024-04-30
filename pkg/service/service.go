@@ -9,4 +9,5 @@ import (
 type Service interface {
 	Run(pool *safe.Pool) error
 	Init(cfg *config.Config) error
+	String() string
 }

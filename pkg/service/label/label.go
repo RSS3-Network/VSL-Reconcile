@@ -10,6 +10,7 @@ import (
 	"github.com/rss3-network/vsl-reconcile/internal/safe"
 	"github.com/rss3-network/vsl-reconcile/pkg/kube"
 	"github.com/rss3-network/vsl-reconcile/pkg/service"
+	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -43,6 +44,10 @@ func (s *Service) Init(cfg *config.Config) error {
 	return nil
 }
 
+func (s *Service) String() string {
+	return "label"
+}
+
 func (s *Service) PodList(ctx context.Context) (*corev1.PodList, error) {
 	clientset, err := kube.Client()
 	if err != nil {
@@ -55,16 +60,18 @@ func (s *Service) PodList(ctx context.Context) (*corev1.PodList, error) {
 }
 
 func (s *Service) Loop(ctx context.Context) {
+	log := zap.L().With(zap.String("service", s.String()))
+
 	clientset, err := kube.Client()
 	if err != nil {
-		fmt.Println(err)
+		log.Error("failed to initialize kubernetes client", zap.Error(err))
 		return
 	}
 
 	for {
 		pods, err := s.PodList(ctx)
 		if err != nil {
-			fmt.Println(err)
+			log.Error("failed to list pods", zap.Error(err))
 			return
 		}
 
@@ -74,19 +81,19 @@ func (s *Service) Loop(ctx context.Context) {
 			isActive, err := rpc.CheckSequencerActive(url)
 
 			if err != nil {
-				fmt.Println(err)
+				log.Error("failed to check sequencer active", zap.Error(err))
 				continue
 			}
 
 			if isActive {
 				err = kube.PatchPod(ctx, clientset, s.namespace, pod.Name, labelVSLActive, "true")
 				if err != nil {
-					fmt.Println(err)
+					log.Error("failed to patch pod", zap.Error(err), zap.String("pod", pod.Name))
 				}
 			} else {
 				err = kube.PatchPod(ctx, clientset, s.namespace, pod.Name, labelVSLActive, "false")
 				if err != nil {
-					fmt.Println(err)
+					log.Error("failed to patch pod", zap.Error(err), zap.String("pod", pod.Name))
 				}
 			}
 		}

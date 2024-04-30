@@ -36,3 +36,7 @@ func (s *Service) Init(_ *config.Config) error {
 
 	return nil
 }
+
+func (s *Service) String() string {
+	return "http"
+}

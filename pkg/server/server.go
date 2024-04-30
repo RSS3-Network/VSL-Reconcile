@@ -1,10 +1,9 @@
 package server
 
 import (
-	"log"
-
 	"github.com/rss3-network/vsl-reconcile/internal/safe"
 	"github.com/rss3-network/vsl-reconcile/pkg/service"
+	"go.uber.org/zap"
 )
 
 type Server struct {
@@ -39,7 +38,10 @@ func (s *Server) startAggregator() {
 	safe.Go(func() {
 		err := s.serviceAggregator.Run(s.routinesPool)
 		if err != nil {
-			log.Fatalf("Error starting service aggregator: %v", err)
+			zap.L().Error("service aggregator failed",
+				zap.Error(err),
+				zap.String("service", s.serviceAggregator.String()),
+			)
 		}
 	})
 }
