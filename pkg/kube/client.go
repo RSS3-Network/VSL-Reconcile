@@ -2,8 +2,8 @@ package kube
 
 import (
 	"context"
-	"flag"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,24 +15,24 @@ import (
 )
 
 func Client() (*kubernetes.Clientset, error) {
-	var kubeconfig *string
+	var (
+		config *rest.Config
+		err    error
+	)
 
-	if home := homedir.HomeDir(); home != "" {
-		kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
-	} else {
-		kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
+	switch {
+	case os.Getenv("KUBERNETES_SERVICE_HOST") != "" && os.Getenv("KUBERNETES_SERVICE_PORT") != "":
+		config, err = rest.InClusterConfig()
+	case os.Getenv("KUBECONFIG") != "":
+		config, err = clientcmd.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
+	case homedir.HomeDir() != "":
+		config, err = clientcmd.BuildConfigFromFlags("", filepath.Join(homedir.HomeDir(), ".kube", "config"))
+	default:
+		return nil, fmt.Errorf("unable to get kubeconfig")
 	}
 
-	flag.Parse()
-
-	var config *rest.Config
-	// use the current context in kubeconfig
-	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
 	if err != nil {
-		config, err = rest.InClusterConfig()
-		if err != nil {
-			return nil, err
-		}
+		return nil, fmt.Errorf("failed to get kubeconfig: %w", err)
 	}
 
 	// create the clientset
