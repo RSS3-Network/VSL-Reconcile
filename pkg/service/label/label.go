@@ -37,8 +37,8 @@ func (s *Service) Run(pool *safe.Pool) error {
 }
 
 func (s *Service) Init(cfg *config.Config) error {
-	s.name = cfg.DiscoveryNS
-	s.namespace = cfg.DiscoverySTS
+	s.name = cfg.DiscoverySTS
+	s.namespace = cfg.DiscoveryNS
 	s.checkInterval = cfg.CheckInterval
 
 	return nil
