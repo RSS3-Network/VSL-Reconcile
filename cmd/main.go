@@ -12,6 +12,7 @@ package main
 
 import (
 	"context"
+	"github.com/rss3-network/vsl-reconcile/pkg/service/label"
 	"log"
 
 	"github.com/rss3-network/vsl-reconcile/config"
@@ -34,6 +35,7 @@ var rootCmd = &cobra.Command{
 		providerAggregator := aggregator.New(
 			cfg,
 			&http.Service{},
+			&label.Service{},
 			&heartbeat.Service{},
 		)
 
