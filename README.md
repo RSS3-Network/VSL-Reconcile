@@ -1,4 +1,4 @@
-# VSL Sequencer Watchdog
+# VSL Sequencer reconcile
 
 An external state management tool for OP sequencers
 

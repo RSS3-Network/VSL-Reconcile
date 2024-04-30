@@ -1,4 +1,4 @@
-package config
+package heartbeat
 
 import (
 	"context"

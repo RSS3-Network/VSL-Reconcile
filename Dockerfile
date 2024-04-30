@@ -20,11 +20,11 @@ FROM scratch AS Runner
 
 WORKDIR /app
 
-COPY --from=Builder /app/app /app/watchdog
+COPY --from=Builder /app/app /app/reconcile
 
 VOLUME /app/data
 
 ENV MODE=prod
 
 # Run the executable
-ENTRYPOINT ["/app/watchdog"]
+ENTRYPOINT ["/app/reconcile"]
