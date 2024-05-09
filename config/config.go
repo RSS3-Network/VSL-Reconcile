@@ -47,7 +47,7 @@ func Setup() (*Config, error) {
 		return nil, fmt.Errorf("failed to parse check interval str (%s): %w", checkIntervalStr, err)
 	}
 
-	// Parse max block time (before we consider the sequencer as unhealthy)
+	// Parse max block time (before we consider the sequencer unhealthy)
 	maxBlockTimeStr := os.Getenv(EnvMaxBlockTime)
 	if maxBlockTimeStr == "" {
 		maxBlockTimeStr = DefaultMaxBlockTime

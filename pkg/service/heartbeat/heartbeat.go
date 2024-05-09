@@ -69,7 +69,7 @@ func (s *Service) String() string {
 }
 
 // activateSequencerByID: Try to activate one of all sequencers from a specified ID.
-// All sequencers are equal, but some sequencers are more equal than others.
+// All sequencers are equal, but some sequencers are "more equal" than others.
 func activateSequencerByID(id int, unsafeHash string, sequencersList []string) int {
 	log := zap.L().With(zap.String("service", "heartbeat"))
 
@@ -91,6 +91,7 @@ func activateSequencerByID(id int, unsafeHash string, sequencersList []string) i
 	return -1
 }
 
+// activateSequencer: Activate a sequencer and return whether it was successful
 func activateSequencer(sequencer string, unsafeHash string) (bool, error) {
 	unsafeHashResponse, _, isReady, err := rpc.GetOPSyncStatus(sequencer)
 	if err != nil {
