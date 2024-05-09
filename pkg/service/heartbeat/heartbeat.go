@@ -121,15 +121,13 @@ func Bootstrap(sequencersList []string) (int, error) {
 	log := zap.L().With(zap.String("service", "heartbeat"))
 
 	log.Debug("Determining current primary sequencer")
-	primarySequencerID, err := findActivePrimary(sequencersList, log)
-
-	if err != nil {
-		return -1, err // Propagate error upwards
-	}
+	primarySequencerID := findActivePrimary(sequencersList, log)
 
 	// Attempt to promote a new primary if no active primary was found
 	if primarySequencerID == -1 {
 		log.Info("No primary sequencer found, starting promotion process...")
+
+		var err error
 
 		primarySequencerID, err = promoteNewPrimary(sequencersList)
 		if err != nil {
@@ -143,7 +141,7 @@ func Bootstrap(sequencersList []string) (int, error) {
 }
 
 // findActivePrimary finds the active primary sequencer which is processing blocks
-func findActivePrimary(sequencersList []string, log *zap.Logger) (int, error) {
+func findActivePrimary(sequencersList []string, log *zap.Logger) int {
 	for id, sequencer := range sequencersList {
 		isActive, err := rpc.CheckSequencerActive(sequencer)
 		if err != nil {
@@ -155,11 +153,11 @@ func findActivePrimary(sequencersList []string, log *zap.Logger) (int, error) {
 			log.Info("Found active primary sequencer", zap.Int("id", id), zap.String("sequencer", sequencer))
 			deactivateExtraSequencers(id, sequencersList, log)
 
-			return id, nil
+			return id
 		}
 	}
 
-	return -1, nil
+	return -1
 }
 
 // deactivateExtraSequencers deactivates all sequencers except the active primary
@@ -193,15 +191,16 @@ func (s *Service) Loop(primarySequencerID int) {
 	for {
 		time.Sleep(s.checkInterval)
 
-		isActive, err := s.checkPrimarySequencerStatus(primarySequencerID, log)
+		isActive, err := s.checkPrimarySequencerStatus(primarySequencerID)
 		if err != nil {
-			// primary sequencer is active, do nothing
+			log.Error("Failed to check primary sequencer status", zap.Error(err))
+
 			continue
 		}
 
 		if !isActive {
 			log.Info("Primary sequencer is not active, switching...")
-			primarySequencerID = s.handleSequencerFailure(primarySequencerID, "", log)
+			primarySequencerID = s.switchSequencer(primarySequencerID, "", log)
 
 			continue
 		}
@@ -217,11 +216,10 @@ func (s *Service) Loop(primarySequencerID int) {
 	}
 }
 
-func (s *Service) checkPrimarySequencerStatus(primarySequencerID int, log *zap.Logger) (bool, error) {
+func (s *Service) checkPrimarySequencerStatus(primarySequencerID int) (bool, error) {
 	isActive, err := rpc.CheckSequencerActive(s.sequencerList[primarySequencerID])
 
 	if err != nil {
-		log.Error("Failed to check primary sequencer status", zap.Error(err))
 		return false, err
 	}
 
@@ -235,7 +233,7 @@ func (s *Service) checkBlockHeight(primarySequencerID int, log *zap.Logger, curr
 	_, blockHeight, _, err := rpc.GetOPSyncStatus(s.sequencerList[primarySequencerID])
 
 	if err != nil {
-		log.Error("Failed to get block status from primary sequencer", zap.Error(err))
+		log.Error("Failed to get block status from primary sequencer", zap.Error(err), zap.Int("sequencer_id", primarySequencerID))
 
 		return currentBlockHeight, err
 	}
@@ -248,13 +246,13 @@ func (s *Service) checkBlockHeight(primarySequencerID int, log *zap.Logger, curr
 
 	if time.Since(currentBlockTime) > s.maxBlockTime {
 		log.Warn("Block time exceeds maximum tolerance, attempting to restart sequencer...")
-		s.handleSequencerFailure(primarySequencerID, "", log)
+		s.switchSequencer(primarySequencerID, "", log)
 	}
 
 	return currentBlockHeight, nil
 }
 
-func (s *Service) handleSequencerFailure(currentSequencerID int, unsafeHash string, log *zap.Logger) int {
+func (s *Service) switchSequencer(currentSequencerID int, unsafeHash string, log *zap.Logger) int {
 	log.Info("Handling failure of the primary sequencer", zap.Int("sequencer_id", currentSequencerID))
 
 	_, err := rpc.DeactivateSequencer(s.sequencerList[currentSequencerID])
