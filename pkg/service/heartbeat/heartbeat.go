@@ -182,79 +182,94 @@ func promoteNewPrimary(sequencersList []string) (int, error) {
 	return primarySequencerID, nil
 }
 
+// Loop is the main heartbeat loop, which monitors the status of the primary sequencer
 func (s *Service) Loop(primarySequencerID int) {
 	log := zap.L().With(zap.String("service", "heartbeat"))
 
 	currentBlockTime := time.Now()
 	currentBlockHeight := int64(0)
 
+	// begin the heartbeat loop
 	for {
 		time.Sleep(s.checkInterval)
 
-		// Check for sequencer status
-		isActive, err := rpc.CheckSequencerActive(s.sequencerList[primarySequencerID])
-
-		switch {
-		case err != nil:
-			log.Error("failed to check primary sequencer status", zap.Error(err))
-		case !isActive:
-			log.Info("primary sequencer is not active, switching...")
-		default:
-			// Primary sequencer is active, let's check the block height
-			log.Debug("start check current block height")
-
-			_, blockHeight, _, err := rpc.GetOPSyncStatus(s.sequencerList[primarySequencerID])
-			if err != nil {
-				// Then see this sequencer as working abnormally, proceed to restart it
-				log.Error("failed to get unsafe L2 status from primary sequencer", zap.Int("id", primarySequencerID), zap.String("sequencer", s.sequencerList[primarySequencerID]), zap.Error(err))
-			} else {
-				// Regard this request as successful and blockHeight is real
-				log.Info("block height get, start compare", zap.Int64("block_height", blockHeight), zap.Int64("current_block_height", currentBlockHeight), zap.Duration("block_time", time.Since(currentBlockTime)), zap.Duration("max_block_time", s.maxBlockTime))
-
-				if blockHeight > currentBlockHeight {
-					// Say hi to our new block
-					log.Info("new block height found, reset tolerate timer", zap.Int64("block_height", blockHeight), zap.Int64("current_block_height", currentBlockHeight), zap.Duration("block_time", time.Since(currentBlockTime)), zap.Duration("max_block_time", s.maxBlockTime))
-
-					currentBlockTime = time.Now()
-					currentBlockHeight = blockHeight
-
-					continue // nothing else to do, wait for next round as this sequencer should be fine
-				}
-
-				// equal or even less than, check max block delay
-				if time.Since(currentBlockTime) <= s.maxBlockTime {
-					// Within acceptable limit, proceed too
-					log.Warn("still old blocks, but it's fine", zap.Int64("block_height", blockHeight), zap.Int64("current_block_height", currentBlockHeight), zap.Duration("block_time", time.Since(currentBlockTime)), zap.Duration("max_block_time", s.maxBlockTime))
-					continue
-				}
-
-				// we can't tolerate this, gear up and let's restart the sequencer!
-				log.Warn("block time exceeds maximal tolerance, this sequencer might working abnormally, trying to restart it...")
-			}
-		}
-
-		// If current sequencer is working abnormally, try to restart it before promote next sequencer as primary
-		log.Info("for some reason the current primary sequencer (#%d %s) is not working, we have to promote a new primary.",
-			zap.Int("id", primarySequencerID),
-			zap.String("sequencer", s.sequencerList[primarySequencerID]),
-		)
-		// 1. deactivate this sequencer
-		log.Info("first let's try to shutdown it")
-
-		unsafeHash, err := rpc.DeactivateSequencer(s.sequencerList[primarySequencerID])
+		isActive, err := s.checkPrimarySequencerStatus(primarySequencerID, log)
 		if err != nil {
-			log.Error("failed to deactivate sequencer (%d): %v",
-				zap.Int("id", primarySequencerID), zap.Error(err))
+			// primary sequencer is active, do nothing
+			continue
 		}
 
-		// 2. activate a new sequencer
-		log.Info("then let's find it's successor")
+		if !isActive {
+			log.Info("Primary sequencer is not active, switching...")
+			primarySequencerID = s.handleSequencerFailure(primarySequencerID, "", log)
 
-		primarySequencerID = activateSequencerByID(primarySequencerID, unsafeHash, s.sequencerList)
-		if primarySequencerID == -1 {
-			log.Fatal("failed to activate any sequencer")
+			continue
 		}
 
-		log.Info("sequencer is now primary.", zap.Int("id", primarySequencerID), zap.String("sequencer", s.sequencerList[primarySequencerID]))
+		blockHeight, err := s.checkBlockHeight(primarySequencerID, log, currentBlockHeight, currentBlockTime)
+		if err != nil || blockHeight == currentBlockHeight {
+			// blockHeight is correct, do nothing
+			continue
+		}
+
+		currentBlockHeight = blockHeight
+		currentBlockTime = time.Now()
 	}
+}
+
+func (s *Service) checkPrimarySequencerStatus(primarySequencerID int, log *zap.Logger) (bool, error) {
+	isActive, err := rpc.CheckSequencerActive(s.sequencerList[primarySequencerID])
+
+	if err != nil {
+		log.Error("Failed to check primary sequencer status", zap.Error(err))
+		return false, err
+	}
+
+	return isActive, nil
+}
+
+// checkBlockHeight checks the current block height of the primary sequencer
+func (s *Service) checkBlockHeight(primarySequencerID int, log *zap.Logger, currentBlockHeight int64, currentBlockTime time.Time) (int64, error) {
+	log.Debug("Start checking current block height")
+
+	_, blockHeight, _, err := rpc.GetOPSyncStatus(s.sequencerList[primarySequencerID])
+
+	if err != nil {
+		log.Error("Failed to get block status from primary sequencer", zap.Error(err))
+
+		return currentBlockHeight, err
+	}
+
+	if blockHeight > currentBlockHeight {
+		log.Info("New block height found", zap.Int64("new_block_height", blockHeight))
+
+		return blockHeight, nil
+	}
+
+	if time.Since(currentBlockTime) > s.maxBlockTime {
+		log.Warn("Block time exceeds maximum tolerance, attempting to restart sequencer...")
+		s.handleSequencerFailure(primarySequencerID, "", log)
+	}
+
+	return currentBlockHeight, nil
+}
+
+func (s *Service) handleSequencerFailure(currentSequencerID int, unsafeHash string, log *zap.Logger) int {
+	log.Info("Handling failure of the primary sequencer", zap.Int("sequencer_id", currentSequencerID))
+
+	_, err := rpc.DeactivateSequencer(s.sequencerList[currentSequencerID])
+
+	if err != nil {
+		log.Error("Failed to deactivate sequencer", zap.Error(err))
+	}
+
+	newPrimaryID := activateSequencerByID(currentSequencerID, unsafeHash, s.sequencerList)
+
+	if newPrimaryID == -1 {
+		log.Fatal("Failed to activate any sequencer")
+	}
+
+	log.Info("New primary sequencer activated.", zap.Int("new_primary_id", newPrimaryID))
+
+	return newPrimaryID
 }
