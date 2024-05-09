@@ -68,62 +68,52 @@ func (s *Service) String() string {
 	return "heartbeat"
 }
 
-// activateSequencerWithFirstID: Try to activate one of all sequencers from a specified ID.
+// activateSequencerByID: Try to activate one of all sequencers from a specified ID.
 // All sequencers are equal, but some sequencers are more equal than others.
-func activateSequencerWithFirstID(firstID int, unsafeHash string, sequencersList []string) int {
+func activateSequencerByID(id int, unsafeHash string, sequencersList []string) int {
 	log := zap.L().With(zap.String("service", "heartbeat"))
 
-	sequencersListLen := len(sequencersList)
-	unsafeHashEnsure := unsafeHash
+	for i := 0; i < len(sequencersList); i++ {
+		// index is the absolute position of sequencer in the list
+		index := (i + id) % len(sequencersList)
 
-	for i := 0; i < sequencersListLen; i++ {
-		// Calculate absolute ID
-		id := i + firstID
-		if id >= sequencersListLen {
-			id -= sequencersListLen
-		}
-
-		var err error
-
-		// Check if under any circumstance the unsafe hash from previously deactivated sequencer could be empty (e.g. it's offline)
-		// Try to get a valid unsafe hash
-		var (
-			isSequencerReady   bool
-			unsafeHashResponse string
-		)
-
-		unsafeHashResponse, _, isSequencerReady, err = rpc.GetOPSyncStatus(sequencersList[id])
-		if err != nil {
-			log.Error("failed to get unsafe hash from sequencer", zap.String("sequencer", sequencersList[id]), zap.Error(err))
-			continue // Proceed to next sequencer
-		}
-
-		if !isSequencerReady || unsafeHashResponse == "" {
-			// This sequencer is not ready to be activated
-			log.Error("sequencer is not ready to be activated",
-				zap.String("sequencer", sequencersList[id]))
-			continue
-		}
-
-		// Update possible missing unsafe hash parameter
-		if unsafeHashEnsure == "" {
-			unsafeHashEnsure = unsafeHashResponse
-		}
-
-		err = rpc.ActivateSequencer(sequencersList[id], unsafeHashEnsure)
-		if err != nil {
-			log.Error("failed to activate sequencer",
-				zap.String("sequencer", sequencersList[id]),
+		// Activates sequencer and handles possible failures internally
+		if activated, err := activateSequencer(sequencersList[index], unsafeHash); activated {
+			return index // Return the ID of the activated sequencer
+		} else if err != nil {
+			log.Error("Failed to activate sequencer",
+				zap.String("sequencer", sequencersList[index]),
 				zap.Error(err),
 			)
-
-			_, _ = rpc.DeactivateSequencer(sequencersList[id]) // Ensure this sequencer is deactivated even it failed to activate
-		} else {
-			return id // That's it, our new king
 		}
 	}
+	// No sequencer could be activated
+	return -1
+}
 
-	return -1 // Everyone has tried, and they all failed
+func activateSequencer(sequencer string, unsafeHash string) (bool, error) {
+	unsafeHashResponse, _, isReady, err := rpc.GetOPSyncStatus(sequencer)
+	if err != nil {
+		return false, err
+	}
+
+	if !isReady || unsafeHashResponse == "" {
+		return false, fmt.Errorf("sequencer %s is not ready", sequencer)
+	}
+
+	// Use unsafeHash from the response if initial unsafeHash is empty
+	if unsafeHash == "" {
+		unsafeHash = unsafeHashResponse
+	}
+
+	err = rpc.ActivateSequencer(sequencer, unsafeHash)
+	if err != nil {
+		// Ensure this sequencer is deactivated even it failed to activate
+		_, _ = rpc.DeactivateSequencer(sequencer)
+		return false, err
+	}
+
+	return true, nil
 }
 
 func Bootstrap(sequencersList []string) (int, error) {
@@ -172,7 +162,7 @@ func Bootstrap(sequencersList []string) (int, error) {
 	if primarySequencerID == -1 {
 		log.Info("no primary sequencer found, start promote progress...")
 
-		primarySequencerID = activateSequencerWithFirstID(0, "", sequencersList)
+		primarySequencerID = activateSequencerByID(0, "", sequencersList)
 		if primarySequencerID == -1 {
 			// All sequencer activate fail
 			return -1, fmt.Errorf("failed to activate any sequencers")
@@ -252,7 +242,7 @@ func (s *Service) Loop(primarySequencerID int) {
 		// 2. activate a new sequencer
 		log.Info("then let's find it's successor")
 
-		primarySequencerID = activateSequencerWithFirstID(primarySequencerID, unsafeHash, s.sequencerList)
+		primarySequencerID = activateSequencerByID(primarySequencerID, unsafeHash, s.sequencerList)
 		if primarySequencerID == -1 {
 			log.Fatal("failed to activate any sequencer")
 		}
