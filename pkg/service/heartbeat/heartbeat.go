@@ -120,56 +120,63 @@ func activateSequencer(sequencer string, unsafeHash string) (bool, error) {
 func Bootstrap(sequencersList []string) (int, error) {
 	log := zap.L().With(zap.String("service", "heartbeat"))
 
-	// Determine which sequencer is primary
-	log.Debug("determine current primary sequencer")
+	log.Debug("Determining current primary sequencer")
+	primarySequencerID, err := findActivePrimary(sequencersList, log)
 
-	primarySequencerID := -1
+	if err != nil {
+		return -1, err // Propagate error upwards
+	}
 
+	// Attempt to promote a new primary if no active primary was found
+	if primarySequencerID == -1 {
+		log.Info("No primary sequencer found, starting promotion process...")
+
+		primarySequencerID, err = promoteNewPrimary(sequencersList)
+		if err != nil {
+			return -1, err // Promotion failed, propagate error
+		}
+	}
+
+	log.Info("Primary sequencer is active.", zap.Int("id", primarySequencerID), zap.String("sequencer", sequencersList[primarySequencerID]))
+
+	return primarySequencerID, nil
+}
+
+// findActivePrimary finds the active primary sequencer which is processing blocks
+func findActivePrimary(sequencersList []string, log *zap.Logger) (int, error) {
 	for id, sequencer := range sequencersList {
 		isActive, err := rpc.CheckSequencerActive(sequencer)
 		if err != nil {
-			// Failed to get sequencer status
-			log.Error("failed to get sequencer status",
-				zap.Int("id", id),
-				zap.String("sequencer", sequencer),
-				zap.Error(err),
-			)
-
+			log.Error("Failed to get sequencer status", zap.Int("id", id), zap.String("sequencer", sequencer), zap.Error(err))
 			continue
 		}
 
 		if isActive {
-			// Will this be the primary sequencer?
-			if primarySequencerID == -1 {
-				// Set as primary sequencer
-				log.Info("found primary sequencer", zap.Int("id", id), zap.String("sequencer", sequencer))
-				primarySequencerID = id
-			} else {
-				// Already have a primary sequencer, deactivate this to prevent conflict (poor optimism)
-				log.Warn("another sequencer is already active, deactivating this sequencer", zap.Int("id", id), zap.String("sequencer", sequencer))
-				// ignore unsafe hash
-				if _, err = rpc.DeactivateSequencer(sequencer); err != nil {
-					log.Error("failed to deactivate another active sequencer",
-						zap.Int("id", id),
-						zap.String("sequencer", sequencer),
-						zap.Error(err),
-					)
-				}
-			}
+			log.Info("Found active primary sequencer", zap.Int("id", id), zap.String("sequencer", sequencer))
+			deactivateExtraSequencers(id, sequencersList, log)
+
+			return id, nil
 		}
 	}
 
-	// If neither of these sequencers are primary, try to promote one
-	if primarySequencerID == -1 {
-		log.Info("no primary sequencer found, start promote progress...")
+	return -1, nil
+}
 
-		primarySequencerID = activateSequencerByID(0, "", sequencersList)
-		if primarySequencerID == -1 {
-			// All sequencer activate fail
-			return -1, fmt.Errorf("failed to activate any sequencers")
+// deactivateExtraSequencers deactivates all sequencers except the active primary
+func deactivateExtraSequencers(primaryID int, sequencersList []string, log *zap.Logger) {
+	for id, sequencer := range sequencersList {
+		if id != primaryID {
+			if _, err := rpc.DeactivateSequencer(sequencer); err != nil {
+				log.Error("Failed to deactivate sequencer", zap.Int("id", id), zap.String("sequencer", sequencer), zap.Error(err))
+			}
 		}
+	}
+}
 
-		log.Info("sequencer is now primary.", zap.Int("id", primarySequencerID), zap.String("sequencer", sequencersList[primarySequencerID]))
+func promoteNewPrimary(sequencersList []string) (int, error) {
+	primarySequencerID := activateSequencerByID(0, "", sequencersList)
+	if primarySequencerID == -1 {
+		return -1, fmt.Errorf("failed to activate any sequencers")
 	}
 
 	return primarySequencerID, nil
