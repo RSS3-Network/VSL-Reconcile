@@ -58,7 +58,7 @@ func Setup() (*Config, error) {
 		return nil, fmt.Errorf("failed to parse max block time str (%s): %w", maxBlockTimeStr, err)
 	}
 
-	if maxBlockTime > checkInterval {
+	if maxBlockTime < checkInterval {
 		return nil, fmt.Errorf("max block time (%s) must be greater than check interval (%s)",
 			maxBlockTime, checkInterval)
 	}
