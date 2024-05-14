@@ -6,7 +6,7 @@ import (
 	"github.com/rss3-network/vsl-reconcile/test"
 )
 
-func Test_activateSequencerWithFirstID(t *testing.T) {
+func Test_activateSequencerByID(t *testing.T) {
 	t.Parallel()
 
 	// Prepare sequencers
@@ -34,14 +34,14 @@ func Test_activateSequencerWithFirstID(t *testing.T) {
 		}
 	}()
 
-	activateSequencerWithFirstIDCondition1(t, sequencers, endpoints)
+	activateSequencerByIDCondition1(t, sequencers, endpoints)
 
-	activateSequencerWithFirstIDCondition2(t, sequencers, endpoints)
+	activateSequencerByIDCondition2(t, sequencers, endpoints)
 
-	activateSequencerWithFirstIDCondition3(t, sequencers, endpoints)
+	activateSequencerByIDCondition3(t, sequencers, endpoints)
 }
 
-func activateSequencerWithFirstIDCondition1(t *testing.T, sequencers []*test.MockSequencer, endpoints []string) {
+func activateSequencerByIDCondition1(t *testing.T, sequencers []*test.MockSequencer, endpoints []string) {
 	// Condition 1: all sequencers stopped, all is ready
 	startWithID := 0
 
@@ -56,7 +56,7 @@ func activateSequencerWithFirstIDCondition1(t *testing.T, sequencers []*test.Moc
 
 	startWithID = 0
 
-	activatedSequencerID := activateSequencerWithFirstID(startWithID, "unsafe-hash-1.1", endpoints)
+	activatedSequencerID := activateSequencerByID(startWithID, "unsafe-hash-1.1", endpoints)
 
 	if activatedSequencerID != startWithID {
 		t.Log("activated wrong sequencer", activatedSequencerID)
@@ -83,7 +83,7 @@ func activateSequencerWithFirstIDCondition1(t *testing.T, sequencers []*test.Moc
 
 	startWithID = 1
 
-	activatedSequencerID = activateSequencerWithFirstID(startWithID, "unsafe-hash-1.2", endpoints)
+	activatedSequencerID = activateSequencerByID(startWithID, "unsafe-hash-1.2", endpoints)
 
 	if activatedSequencerID != startWithID {
 		t.Log("activated wrong sequencer", activatedSequencerID)
@@ -100,7 +100,7 @@ func activateSequencerWithFirstIDCondition1(t *testing.T, sequencers []*test.Moc
 	}
 }
 
-func activateSequencerWithFirstIDCondition2(t *testing.T, sequencers []*test.MockSequencer, endpoints []string) {
+func activateSequencerByIDCondition2(t *testing.T, sequencers []*test.MockSequencer, endpoints []string) {
 	// Condition 2: all sequencers stopped, some is not ready
 	notReadyIndex := 0
 
@@ -115,7 +115,7 @@ func activateSequencerWithFirstIDCondition2(t *testing.T, sequencers []*test.Moc
 		ms.SetUnsafeHash("unsafe-hash-2")
 	}
 
-	activatedSequencerID := activateSequencerWithFirstID(0, "unsafe-hash-2.1", endpoints)
+	activatedSequencerID := activateSequencerByID(0, "unsafe-hash-2.1", endpoints)
 
 	if activatedSequencerID != 1 {
 		t.Log("activated wrong sequencer", activatedSequencerID)
@@ -140,7 +140,7 @@ func activateSequencerWithFirstIDCondition2(t *testing.T, sequencers []*test.Moc
 		ms.SetIsReady(i != notReadyIndex)
 	}
 
-	activatedSequencerID = activateSequencerWithFirstID(2, "unsafe-hash-2.2", endpoints)
+	activatedSequencerID = activateSequencerByID(2, "unsafe-hash-2.2", endpoints)
 
 	if activatedSequencerID != 2 {
 		t.Log("activated wrong sequencer", activatedSequencerID)
@@ -167,7 +167,7 @@ func activateSequencerWithFirstIDCondition2(t *testing.T, sequencers []*test.Moc
 		ms.SetIsReady(i != notReadyIndex)
 	}
 
-	activatedSequencerID = activateSequencerWithFirstID(2, "unsafe-hash-2.3", endpoints)
+	activatedSequencerID = activateSequencerByID(2, "unsafe-hash-2.3", endpoints)
 
 	if activatedSequencerID != 0 {
 		t.Log("activated wrong sequencer", activatedSequencerID)
@@ -184,7 +184,7 @@ func activateSequencerWithFirstIDCondition2(t *testing.T, sequencers []*test.Moc
 	}
 }
 
-func activateSequencerWithFirstIDCondition3(t *testing.T, sequencers []*test.MockSequencer, endpoints []string) {
+func activateSequencerByIDCondition3(t *testing.T, sequencers []*test.MockSequencer, endpoints []string) {
 	// Condition 1: all sequencers stopped, none is ready
 	// Situation 1: Start with 0, should no active
 	for _, ms := range sequencers {
@@ -197,7 +197,7 @@ func activateSequencerWithFirstIDCondition3(t *testing.T, sequencers []*test.Moc
 		ms.SetUnsafeHash("unsafe-hash-3")
 	}
 
-	activatedSequencerID := activateSequencerWithFirstID(0, "unsafe-hash-3.1", endpoints)
+	activatedSequencerID := activateSequencerByID(0, "unsafe-hash-3.1", endpoints)
 
 	if activatedSequencerID != -1 {
 		t.Log("activated wrong sequencer", activatedSequencerID)
@@ -223,7 +223,7 @@ func activateSequencerWithFirstIDCondition3(t *testing.T, sequencers []*test.Moc
 	}
 
 	// Situation 2: Start with 1, should no active
-	activatedSequencerID = activateSequencerWithFirstID(1, "unsafe-hash-3.2", endpoints)
+	activatedSequencerID = activateSequencerByID(1, "unsafe-hash-3.2", endpoints)
 
 	if activatedSequencerID != -1 {
 		t.Log("activated wrong sequencer", activatedSequencerID)

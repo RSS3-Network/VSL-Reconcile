@@ -47,7 +47,7 @@ func Setup() (*Config, error) {
 		return nil, fmt.Errorf("failed to parse check interval str (%s): %w", checkIntervalStr, err)
 	}
 
-	// Parse max block time (how long can we tolerate if the block number doesn't increase)
+	// Parse max block time (before we consider the sequencer unhealthy)
 	maxBlockTimeStr := os.Getenv(EnvMaxBlockTime)
 	if maxBlockTimeStr == "" {
 		maxBlockTimeStr = DefaultMaxBlockTime
@@ -56,6 +56,11 @@ func Setup() (*Config, error) {
 	maxBlockTime, err := time.ParseDuration(maxBlockTimeStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse max block time str (%s): %w", maxBlockTimeStr, err)
+	}
+
+	if maxBlockTime < checkInterval {
+		return nil, fmt.Errorf("max block time (%s) must be greater than check interval (%s)",
+			maxBlockTime, checkInterval)
 	}
 
 	return &Config{
