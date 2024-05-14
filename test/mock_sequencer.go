@@ -80,7 +80,10 @@ func NewMockSequencer() (*MockSequencer, string, error) {
 
 	// Prepare server
 	ms.server = http.Server{
-		Handler: mockSequencerMux,
+		Handler:      mockSequencerMux,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 
 	// Server start
@@ -105,12 +108,7 @@ func (ms *MockSequencer) handleJSONRPC(w http.ResponseWriter, req *http.Request)
 	// Parse request
 	var reqBody JSONRPCRequestData
 
-	err := json.NewDecoder(req.Body).Decode(&reqBody)
-	if err != nil {
-		// Fail to decode body
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	_ = json.NewDecoder(req.Body).Decode(&reqBody)
 
 	// Prepare response
 	var resBodyBytes []byte

@@ -1,8 +1,9 @@
 package heartbeat
 
 import (
-	"github.com/rss3-network/vsl-reconcile/test"
 	"testing"
+
+	"github.com/rss3-network/vsl-reconcile/test"
 )
 
 func Test_activateSequencerWithFirstID(t *testing.T) {
@@ -12,6 +13,7 @@ func Test_activateSequencerWithFirstID(t *testing.T) {
 	sequencersCount := 3
 
 	sequencers := make([]*test.MockSequencer, sequencersCount)
+
 	endpoints := make([]string, sequencersCount)
 
 	var (
@@ -20,6 +22,7 @@ func Test_activateSequencerWithFirstID(t *testing.T) {
 
 	for i := 0; i < sequencersCount; i++ {
 		sequencers[i], endpoints[i], err = test.NewMockSequencer()
+
 		if err != nil {
 			t.Fatal("failed to prepare mock sequencer", i, err)
 		}
@@ -31,16 +34,19 @@ func Test_activateSequencerWithFirstID(t *testing.T) {
 		}
 	}()
 
-	activateSequencerWithFirstID_Condition1(t, sequencers, endpoints)
-	activateSequencerWithFirstID_Condition2(t, sequencers, endpoints)
-	activateSequencerWithFirstID_Condition3(t, sequencers, endpoints)
+	activateSequencerWithFirstIDCondition1(t, sequencers, endpoints)
+
+	activateSequencerWithFirstIDCondition2(t, sequencers, endpoints)
+
+	activateSequencerWithFirstIDCondition3(t, sequencers, endpoints)
 }
 
-func activateSequencerWithFirstID_Condition1(t *testing.T, sequencers []*test.MockSequencer, endpoints []string) {
+func activateSequencerWithFirstIDCondition1(t *testing.T, sequencers []*test.MockSequencer, endpoints []string) {
 	// Condition 1: all sequencers stopped, all is ready
 	startWithID := 0
 
 	// Situation 1: Start with 0, should activate 0
+
 	for _, ms := range sequencers {
 		ms.SetIsWithAdmin(true)
 		ms.SetIsActivated(false)
@@ -49,14 +55,19 @@ func activateSequencerWithFirstID_Condition1(t *testing.T, sequencers []*test.Mo
 	}
 
 	startWithID = 0
+
 	activatedSequencerID := activateSequencerWithFirstID(startWithID, "unsafe-hash-1.1", endpoints)
+
 	if activatedSequencerID != startWithID {
 		t.Log("activated wrong sequencer", activatedSequencerID)
+
 		t.Fail()
 	}
+
 	for i, ms := range sequencers {
 		if ms.GetIsActivated() != (i == startWithID) {
 			t.Log("sequencer state is incorrect", i)
+
 			t.Fail()
 		}
 	}
@@ -64,44 +75,58 @@ func activateSequencerWithFirstID_Condition1(t *testing.T, sequencers []*test.Mo
 	// Situation 2: Start with 1, should activate 1
 	for _, ms := range sequencers {
 		ms.SetIsWithAdmin(true)
+
 		ms.SetIsActivated(false)
+
 		ms.SetIsReady(true)
 	}
 
 	startWithID = 1
+
 	activatedSequencerID = activateSequencerWithFirstID(startWithID, "unsafe-hash-1.2", endpoints)
+
 	if activatedSequencerID != startWithID {
 		t.Log("activated wrong sequencer", activatedSequencerID)
+
 		t.Fail()
 	}
+
 	for i, ms := range sequencers {
 		if ms.GetIsActivated() != (i == startWithID) {
 			t.Log("sequencer state is incorrect", i)
+
 			t.Fail()
 		}
 	}
 }
 
-func activateSequencerWithFirstID_Condition2(t *testing.T, sequencers []*test.MockSequencer, endpoints []string) {
+func activateSequencerWithFirstIDCondition2(t *testing.T, sequencers []*test.MockSequencer, endpoints []string) {
 	// Condition 2: all sequencers stopped, some is not ready
 	notReadyIndex := 0
 
 	// Situation 1: Start with 0, should activate 1
 	for i, ms := range sequencers {
 		ms.SetIsWithAdmin(true)
+
 		ms.SetIsActivated(false)
+
 		ms.SetIsReady(i != notReadyIndex)
+
 		ms.SetUnsafeHash("unsafe-hash-2")
 	}
 
 	activatedSequencerID := activateSequencerWithFirstID(0, "unsafe-hash-2.1", endpoints)
+
 	if activatedSequencerID != 1 {
 		t.Log("activated wrong sequencer", activatedSequencerID)
+
 		t.Fail()
 	}
+
 	for i, ms := range sequencers {
 		if ms.GetIsActivated() != (i == 1) {
 			t.Log("sequencer state is incorrect", i)
+
 			t.Fail()
 		}
 	}
@@ -109,18 +134,24 @@ func activateSequencerWithFirstID_Condition2(t *testing.T, sequencers []*test.Mo
 	// Situation 2: Start with 2, should activate 2
 	for i, ms := range sequencers {
 		ms.SetIsWithAdmin(true)
+
 		ms.SetIsActivated(false)
+
 		ms.SetIsReady(i != notReadyIndex)
 	}
 
 	activatedSequencerID = activateSequencerWithFirstID(2, "unsafe-hash-2.2", endpoints)
+
 	if activatedSequencerID != 2 {
 		t.Log("activated wrong sequencer", activatedSequencerID)
+
 		t.Fail()
 	}
+
 	for i, ms := range sequencers {
 		if ms.GetIsActivated() != (i == 2) {
 			t.Log("sequencer state is incorrect", i)
+
 			t.Fail()
 		}
 	}
@@ -130,42 +161,54 @@ func activateSequencerWithFirstID_Condition2(t *testing.T, sequencers []*test.Mo
 
 	for i, ms := range sequencers {
 		ms.SetIsWithAdmin(true)
+
 		ms.SetIsActivated(false)
+
 		ms.SetIsReady(i != notReadyIndex)
 	}
 
 	activatedSequencerID = activateSequencerWithFirstID(2, "unsafe-hash-2.3", endpoints)
+
 	if activatedSequencerID != 0 {
 		t.Log("activated wrong sequencer", activatedSequencerID)
+
 		t.Fail()
 	}
+
 	for i, ms := range sequencers {
 		if ms.GetIsActivated() != (i == 0) {
 			t.Log("sequencer state is incorrect", i)
+
 			t.Fail()
 		}
 	}
 }
 
-func activateSequencerWithFirstID_Condition3(t *testing.T, sequencers []*test.MockSequencer, endpoints []string) {
+func activateSequencerWithFirstIDCondition3(t *testing.T, sequencers []*test.MockSequencer, endpoints []string) {
 	// Condition 1: all sequencers stopped, none is ready
-
 	// Situation 1: Start with 0, should no active
 	for _, ms := range sequencers {
 		ms.SetIsWithAdmin(true)
+
 		ms.SetIsActivated(false)
+
 		ms.SetIsReady(false)
+
 		ms.SetUnsafeHash("unsafe-hash-3")
 	}
 
 	activatedSequencerID := activateSequencerWithFirstID(0, "unsafe-hash-3.1", endpoints)
+
 	if activatedSequencerID != -1 {
 		t.Log("activated wrong sequencer", activatedSequencerID)
+
 		t.Fail()
 	}
+
 	for i, ms := range sequencers {
 		if ms.GetIsActivated() != (i == -1) {
 			t.Log("sequencer state is incorrect", i)
+
 			t.Fail()
 		}
 	}
@@ -173,19 +216,25 @@ func activateSequencerWithFirstID_Condition3(t *testing.T, sequencers []*test.Mo
 	// Reset
 	for _, ms := range sequencers {
 		ms.SetIsWithAdmin(true)
+
 		ms.SetIsActivated(false)
+
 		ms.SetIsReady(false)
 	}
 
 	// Situation 2: Start with 1, should no active
 	activatedSequencerID = activateSequencerWithFirstID(1, "unsafe-hash-3.2", endpoints)
+
 	if activatedSequencerID != -1 {
 		t.Log("activated wrong sequencer", activatedSequencerID)
+
 		t.Fail()
 	}
+
 	for i, ms := range sequencers {
 		if ms.GetIsActivated() != (i == -1) {
 			t.Log("sequencer state is incorrect", i)
+
 			t.Fail()
 		}
 	}
@@ -198,6 +247,7 @@ func TestBootstrap(t *testing.T) {
 	sequencersCount := 3
 
 	sequencers := make([]*test.MockSequencer, sequencersCount)
+
 	endpoints := make([]string, sequencersCount)
 
 	var (
@@ -206,6 +256,7 @@ func TestBootstrap(t *testing.T) {
 
 	for i := 0; i < sequencersCount; i++ {
 		sequencers[i], endpoints[i], err = test.NewMockSequencer()
+
 		if err != nil {
 			t.Fatal("failed to prepare mock sequencer", i, err)
 		}
@@ -217,146 +268,193 @@ func TestBootstrap(t *testing.T) {
 		}
 	}()
 
-	Bootstrap_Condition1(t, sequencers, endpoints)
-	Bootstrap_Condition2(t, sequencers, endpoints)
-	Bootstrap_Condition3(t, sequencers, endpoints)
-	Bootstrap_Condition4(t, sequencers, endpoints)
-	Bootstrap_Condition5(t, sequencers, endpoints)
+	BootstrapCondition1(t, sequencers, endpoints)
+
+	BootstrapCondition2(t, sequencers, endpoints)
+
+	BootstrapCondition3(t, sequencers, endpoints)
+
+	BootstrapCondition4(t, sequencers, endpoints)
+
+	BootstrapCondition5(t, sequencers, endpoints)
 }
 
-func Bootstrap_Condition1(t *testing.T, sequencers []*test.MockSequencer, endpoints []string) {
+func BootstrapCondition1(t *testing.T, sequencers []*test.MockSequencer, endpoints []string) {
 	// Condition 1: all sequencers stopped, all is ready
-
 	// Situation 1: Should activate 0
 	for _, ms := range sequencers {
 		ms.SetIsWithAdmin(true)
+
 		ms.SetIsActivated(false)
+
 		ms.SetIsReady(true)
+
 		ms.SetUnsafeHash("unsafe-hash-1.1")
 	}
 
 	activatedSequencerID, err := Bootstrap(endpoints)
+
 	if err != nil {
 		t.Log("should no error", err)
+
 		t.Fail()
 	}
+
 	if !sequencers[0].GetIsActivated() {
 		t.Log("should be activated")
+
 		t.Fail()
 	}
+
 	if activatedSequencerID != 0 {
 		t.Log("activated wrong sequencer", activatedSequencerID)
+
 		t.Fail()
 	}
 }
 
-func Bootstrap_Condition2(t *testing.T, sequencers []*test.MockSequencer, endpoints []string) {
+func BootstrapCondition2(t *testing.T, sequencers []*test.MockSequencer, endpoints []string) {
 	// Condition 2: all sequencers stopped, some is not ready
 	notReadyIndex := 0
 
 	for i, ms := range sequencers {
 		ms.SetIsWithAdmin(true)
+
 		ms.SetIsActivated(false)
+
 		ms.SetIsReady(i != notReadyIndex)
+
 		ms.SetUnsafeHash("unsafe-hash-2.1")
 	}
 
 	// Situation 1: Should activate 1
+
 	activatedSequencerID, err := Bootstrap(endpoints)
+
 	if err != nil {
 		t.Log("should no error", err)
+
 		t.Fail()
 	}
+
 	if !sequencers[1].GetIsActivated() {
 		t.Log("should be activated")
+
 		t.Fail()
 	}
+
 	if activatedSequencerID != 1 {
 		t.Log("activated wrong sequencer", activatedSequencerID)
+
 		t.Fail()
 	}
 }
 
-func Bootstrap_Condition3(t *testing.T, sequencers []*test.MockSequencer, endpoints []string) {
+func BootstrapCondition3(t *testing.T, sequencers []*test.MockSequencer, endpoints []string) {
 	// Condition 3: one sequencer started, all is ready
 	activeIndex := 1
 
 	// Situation 1: Started sequencer is ready, should keep activated index
 	for i, ms := range sequencers {
 		ms.SetIsWithAdmin(true)
+
 		ms.SetIsActivated(i == activeIndex)
+
 		ms.SetIsReady(true)
+
 		ms.SetUnsafeHash("unsafe-hash-3.1")
 	}
 
 	activatedSequencerID, err := Bootstrap(endpoints)
+
 	if err != nil {
 		t.Log("should no error", err)
+
 		t.Fail()
 	}
+
 	if activatedSequencerID != activeIndex {
 		t.Log("activated wrong sequencer", activatedSequencerID)
+
 		t.Fail()
 	}
+
 	for i, ms := range sequencers {
 		if ms.GetIsActivated() != (i == activeIndex) {
 			t.Log("sequencer state is incorrect", i)
+
 			t.Fail()
 		}
 	}
 }
 
-func Bootstrap_Condition4(t *testing.T, sequencers []*test.MockSequencer, endpoints []string) {
+func BootstrapCondition4(t *testing.T, sequencers []*test.MockSequencer, endpoints []string) {
 	// Condition 4: multiple sequencer started, all is ready
-
 	// Situation 1: Should activate 0 and deactivate others
 	for _, ms := range sequencers {
 		ms.SetIsWithAdmin(true)
+
 		ms.SetIsActivated(true)
+
 		ms.SetIsReady(true)
+
 		ms.SetUnsafeHash("unsafe-hash-4.1")
 	}
 
 	activatedSequencerID, err := Bootstrap(endpoints)
+
 	if err != nil {
 		t.Log("should no error", err)
+
 		t.Fail()
 	}
+
 	if activatedSequencerID != 0 {
 		t.Log("activated wrong sequencer", activatedSequencerID)
+
 		t.Fail()
 	}
+
 	for i, ms := range sequencers {
 		if ms.GetIsActivated() != (i == 0) {
 			t.Log("sequencer state is incorrect", i)
+
 			t.Fail()
 		}
 	}
 }
 
-func Bootstrap_Condition5(t *testing.T, sequencers []*test.MockSequencer, endpoints []string) {
+func BootstrapCondition5(t *testing.T, sequencers []*test.MockSequencer, endpoints []string) {
 	// Condition 5: no sequencer ready
-
 	// Situation 1: Ready w/ empty unsafe hash (invalid state)
 	for _, ms := range sequencers {
 		ms.SetIsWithAdmin(true)
+
 		ms.SetIsActivated(false)
+
 		ms.SetIsReady(true)
+
 		ms.SetUnsafeHash("") // Empty is invalid
 	}
 
 	activatedSequencerID, err := Bootstrap(endpoints)
+
 	if err == nil {
 		t.Log("should be error")
+
 		t.Fail()
 	}
+
 	if activatedSequencerID != -1 {
 		t.Log("activated wrong sequencer", activatedSequencerID)
+
 		t.Fail()
 	}
+
 	for i, ms := range sequencers {
 		if ms.GetIsActivated() != (i == -1) {
 			t.Log("sequencer state is incorrect", i)
+
 			t.Fail()
 		}
 	}
@@ -364,23 +462,32 @@ func Bootstrap_Condition5(t *testing.T, sequencers []*test.MockSequencer, endpoi
 	// Situation 2: Not ready
 	for _, ms := range sequencers {
 		ms.SetIsWithAdmin(true)
+
 		ms.SetIsActivated(false)
+
 		ms.SetIsReady(false)
+
 		ms.SetUnsafeHash("unsafe-hash-5.2")
 	}
 
 	activatedSequencerID, err = Bootstrap(endpoints)
+
 	if err == nil {
 		t.Log("should be error")
+
 		t.Fail()
 	}
+
 	if activatedSequencerID != -1 {
 		t.Log("activated wrong sequencer", activatedSequencerID)
+
 		t.Fail()
 	}
+
 	for i, ms := range sequencers {
 		if ms.GetIsActivated() != (i == -1) {
 			t.Log("sequencer state is incorrect", i)
+
 			t.Fail()
 		}
 	}
